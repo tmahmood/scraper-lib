@@ -1,0 +1,11 @@
+{
+	"name": "topretirements",
+	"blacklist": [
+		"topretirements.com/index.php?",
+		"topretirements.com/city_history.php",
+		"topretirements.com/edit_city_type.php",
+		"topretirements.com/forum",
+		"topretirements.com/Forum/"
+		],
+	"whitelist": []
+}

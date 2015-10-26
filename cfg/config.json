@@ -1,0 +1,18 @@
+{
+	"logger": {
+		"template" : "%(asctime)s - %(levelname)-6s - %(name)s - %(message)s",
+		"path": "logs/app.log",
+		"base": "app_name",
+		"level": "DEBUG",
+		"console": { "level": "INFO" },
+		"file": { "level": "DEBUG" }
+	},
+	"db": {
+		"sqlite": {
+			"file": "database_file_name",
+			"timeout": 10,
+			"same_thread": 0
+		}
+	}
+}
+
