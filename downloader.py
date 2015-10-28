@@ -25,12 +25,9 @@ class BaseDownloader(object):
         self.init_opener()
 
     def init_opener(self):
-        self.logger.debug("init opener")
         if hasattr(self, 'opener'):
-            self.logger.debug("opener exists, closing")
             self.opener.close()
             self.downloads = 0
-            self.logger.debug("opener closed")
         self.cj = cookielib.LWPCookieJar('cookie.jar')
         self.opener = urllib2.build_opener(
                 urllib2.HTTPRedirectHandler(),
@@ -38,7 +35,6 @@ class BaseDownloader(object):
                 urllib2.HTTPCookieProcessor(self.cj),
                 )
         self.opener.addheaders = [('User-agent', USER_AGENT)]
-        self.logger.debug("opener init")
 
     def download(self, url, post=None):
         """ Downloads url, if post is not None then
@@ -50,18 +46,15 @@ class BaseDownloader(object):
         """
         self.content = ''
         error_count = 0
-        self.logger.debug('starting download')
         while True:
             try:
                 response = self.opener.open(url.strip('?'), post, timeout=30)
                 content = ''.join(response.readlines())
-                self.logger.debug('download done')
                 break
             except (urllib2.URLError, urllib2.HTTPError) as e:
                 self.logger.error('error occurred {}'.format(url))
                 error_count = error_count + 1
                 if error_count > 3 and error_count < 5:
-                    self.logger.info('waiting ...')
                     time.sleep(10)
                     self.init_opener()
                     continue
@@ -91,7 +84,7 @@ class DomDownloader(BaseDownloader):
     def download(self, url=None, post=None, remove_br = False):
         state = super(DomDownloader, self).download(url, post)
         if not state:
-           self.logger.debug('download failed')
+           self.logger.error('download failed')
            return None
         content = self.content
         if remove_br:
@@ -120,15 +113,10 @@ class CachedDownloader(BaseDownloader):
         self.content = ''
         filename = utils.hash(url, post)
         fullpath = self.file_cached_path(filename, url)
-        self.logger.debug('URL: %s', url)
-        self.logger.debug('POST: %s', post)
-        self.logger.debug('FULPATH: %s', fullpath)
         if os.path.exists(fullpath):
-            self.logger.debug('got from cache')
             self.content = utils.read_file(fullpath)
             self.from_cache = True
             return True
-        self.logger.debug('download to: %s', fullpath)
         self.from_cache = False
         error = 0
         state = super(CachedDownloader, self).download(url, post)
@@ -142,7 +130,6 @@ class CachedDownloader(BaseDownloader):
         filename = utils.hash(url, post)
         fullpath = self.file_cached_path(filename)
         if os.path.exists(fullpath):
-            self.logger.debug('clear from cache: %s', fullpath)
             os.unlink(fullpath)
 
 
