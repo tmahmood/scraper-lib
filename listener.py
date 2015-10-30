@@ -2,9 +2,9 @@ import logging
 import socket
 import threading
 import sys
+import os
 from libs.config import Config
 from inc.client import Client
-import os
 
 g_config = Config()
 l = '{}.server'.format(g_config.g('logger.base'))
@@ -15,6 +15,8 @@ class ConnectionThread(threading.Thread):
     def __init__(self, host, port, db):
         super(ConnectionThread, self).__init__()
         self.db  = db
+        self.db.query('delete from runlogs')
+
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.s.bind((host, port))

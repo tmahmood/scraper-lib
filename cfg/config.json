@@ -1,6 +1,6 @@
 {
 	"logger": {
-		"template" : "%(asctime)s - %(levelname)-6s - %(name)s - %(message)s",
+		"template" : "%(asctime)s - %(levelname)-6s - %(name)s - %(lineno)d - %(message)s",
 		"path": "logs/app.log",
 		"base": "app_name",
 		"level": "DEBUG",

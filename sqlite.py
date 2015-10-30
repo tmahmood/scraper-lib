@@ -1,7 +1,10 @@
 import sqlite3 as sqlite
 from config import Config
+import logging
 
-config = Config()
+g_config = Config()
+l = '{}.sqlite'.format(g_config.g('logger.base'))
+logger = logging.getLogger(l)
 
 def dict_factory(cursor, row):
     d = {}
@@ -15,9 +18,9 @@ class SQLite(object):
     def __init__(self):
         super(SQLite, self).__init__()
         self.prep_char = '?'
-        self.dbname = config.g('db.sqlite.file')
-        self.timeout = config.g('db.sqlite.timeout')
-        s = config.g('db.sqlite.same_thread', 0)
+        self.dbname = g_config.g('db.sqlite.file')
+        self.timeout = g_config.g('db.sqlite.timeout')
+        s = g_config.g('db.sqlite.same_thread', 0)
         if s == 0:
             self.same_thread = False
         else:
@@ -77,6 +80,7 @@ class SQLite(object):
         fields = u','.join(tfields)
         types = u', '.join([(u'%s' % self.prep_char)] * len(tfields))
         q = u"INSERT INTO %s (%s) VALUES (%s)" % (table, cols, types)
+        logger.debug(q)
         retries = 0
         while True:
             try:
@@ -91,11 +95,13 @@ class SQLite(object):
                     self.lastid = cur.lastrowid
                 return status
             except sqlite.IntegrityError as sie:
+                logger.error(sie)
                 return -2
             except Exception as e:
                 if e[0] == 2006:
                     self.connect()
                     continue
+                logger.error(e)
                 self.lastid = None
                 raise e
 

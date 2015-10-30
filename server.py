@@ -18,7 +18,7 @@ class Server(object):
     def start(self):
         try:
             conn = listener.ConnectionThread(self.host, self.port, self.db)
-            utils.save_to_file('../port', '{}'.format(self.port))
+            utils.save_to_file('port', '{}'.format(self.port))
             conn.start()
         except Exception as e:
             print ("FAILED")
@@ -27,4 +27,3 @@ class Server(object):
                 if conn: conn.s.close()
             except Exception as e:
                 pass
-
