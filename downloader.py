@@ -94,7 +94,7 @@ class DomDownloader(BaseDownloader):
         self.dom = html.fromstring(content)
         return True
 
-    def clean_dom(self, baseurl):
+    def clean_dom(self):
         cleaner = Cleaner()
         cleaner.script = True
         cleaner.style = True

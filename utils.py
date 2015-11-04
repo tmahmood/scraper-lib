@@ -99,7 +99,7 @@ def setup_logger():
     ch = logging.StreamHandler()
     template = config.get('logger', 'template')
     fm = logging.Formatter(template)
-    fm.datefmt = '%m-%d %H:%M'
+    fm.datefmt = config.g('logger.datefmt')
     fh.setFormatter(fm)
     ch.setFormatter(fm)
     ch.setLevel(clevel)
