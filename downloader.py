@@ -10,6 +10,8 @@ from lxml import html, etree
 from lxml.html.clean import clean_html, Cleaner
 import utils
 import config
+import lxml.html.soupparser
+from lxml.etree import XMLSyntaxError
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 g_config = config.Config()
@@ -91,8 +93,11 @@ class DomDownloader(BaseDownloader):
             content = content.replace('<br>', '\n')
             content = content.replace('</br>', '\n')
             content = content.replace('<br />', '\n')
-        self.dom = html.fromstring(content)
-        return True
+        try:
+            self.dom = html.fromstring(content)
+        except (UnicodeDecodeError, XMLSyntaxError):
+            self.logger.info('using beautifulsoup')
+            self.dom = Dom(lxml.html.soupparser.fromstring(content), 'soup')
 
     def clean_dom(self):
         cleaner = Cleaner()
@@ -100,6 +105,7 @@ class DomDownloader(BaseDownloader):
         cleaner.style = True
         cleaner.comments = True
         return cleaner.clean_html(self.dom)
+
 
 class CachedDownloader(BaseDownloader):
 
@@ -121,7 +127,7 @@ class CachedDownloader(BaseDownloader):
         error = 0
         state = super(CachedDownloader, self).download(url, post)
         if state:
-            utils.save_to_file(fullpath, self.content)
+            utils.save_to_file(fullpath, self.content, True)
             return True
         return False
 
@@ -157,3 +163,32 @@ class CachedDomLoader(DomDownloader, CachedDownloader):
         super(DomDownloader, self).__init__()
         l = '{}.dm.cached_dom'.format(g_config.g('logger.base'))
         self.logger = logging.getLogger(l)
+
+class Dom(object):
+    def __init__(self, html, parser):
+        self.html = html
+        self.parser = parser
+
+
+    def xpath(self, xpath):
+        if self.parser == 'soup':
+            return self.html.find(xpath)
+        else:
+            return self.html.xpath(xpath)
+
+    def call(self, method):
+        return self.html.method()
+
+
+    def make_links_absolute(self, url):
+        if self.parser != 'soup':
+            self.html.make_links_absolute(url)
+            return
+        for tag in self.html.find_all('a', href=True):
+            tag['href'] = urlparse.urljoin(url, tag['href'])
+
+def decode_html(html_string):
+    converted = UnicodeDammit(html_string)
+    if not converted.unicode_markup:
+        raise Exception('Failed to detect encoding')
+    return converted.unicode_markup

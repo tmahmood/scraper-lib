@@ -3,6 +3,7 @@ import re
 import codecs
 import logging
 from libs import config
+import sys
 
 try:
     from hashlib import md5
@@ -26,7 +27,7 @@ def read_file(filename, linewise=False):
 def save_to_file(filename, content, use_codec=False):
     if use_codec:
         with codecs.open(filename, encoding='utf-8', mode='w') as fp:
-            fp.write(content)
+            fp.write(unicode(content))
     else:
         with open(filename, mode='w') as fp:
             fp.write(content)
@@ -107,3 +108,33 @@ def setup_logger():
     logger.addHandler(fh)
     logger.addHandler(ch)
     return logger
+
+
+def dict_g(d, ky, default=False):
+    keys = ky.split('.')
+    k = d
+    for kw in keys:
+        if not kw in k:
+            return default
+        k = k[kw]
+    return k
+
+
+def dict_s(d, ky, val):
+    keys = ky.split('.')
+    k = d
+    if len(keys) == 1:
+        d[ky] = val
+    while True:
+        kw = keys.pop(0)
+        if kw not in k:
+            if len(keys) == 0:
+                k[kw] = None
+            else:
+                k[kw] = {}
+        if type(k[kw]) != type({}):
+            print (kw)
+            k[kw] = val
+            break
+        else:
+            k = k[kw]
