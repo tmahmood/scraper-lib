@@ -10,8 +10,8 @@ from lxml import html, etree
 from lxml.html.clean import clean_html, Cleaner
 import utils
 import config
-import lxml.html.soupparser
 from lxml.etree import XMLSyntaxError
+from urlparse import urlparse
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 g_config = config.Config()
@@ -26,6 +26,7 @@ class BaseDownloader(object):
         self.downloads = 0
         self.init_opener()
 
+
     def init_opener(self):
         if hasattr(self, 'opener'):
             self.opener.close()
@@ -38,20 +39,14 @@ class BaseDownloader(object):
                 )
         self.opener.addheaders = [('User-agent', USER_AGENT)]
 
-    def download(self, url, post=None):
-        """ Downloads url, if post is not None then
-        makes a post request
 
-        :url: Url to send request to
-        :post: data to be post
-        :returns: True or False depending on result
-        """
+    def download(self, url, post=None):
         self.content = ''
         error_count = 0
         while True:
             try:
                 response = self.opener.open(url.strip('?'), post, timeout=30)
-                content = ''.join(response.readlines())
+                content = unicode(''.join(response.readlines()), errors='ignore')
                 break
             except (urllib2.URLError, urllib2.HTTPError) as e:
                 self.logger.error('error occurred {}'.format(url))
@@ -63,13 +58,14 @@ class BaseDownloader(object):
                 if error_count > 5:
                     raise e
             except Exception as e:
-                print ('error')
+                self.logger.exception('failed to download')
                 raise e
         self.content = content
         self.last_url = response.url
         self.downloads = self.downloads + 1
         self.take_a_nap_after(10, 5)
         return True
+
 
     def take_a_nap_after(self, after, duration):
         if self.downloads % after == 0:
@@ -83,6 +79,7 @@ class DomDownloader(BaseDownloader):
         l = '{}.dm.dom'.format(g_config.g('logger.base'))
         self.logger = logging.getLogger(l)
 
+
     def download(self, url=None, post=None, remove_br = False):
         state = super(DomDownloader, self).download(url, post)
         if not state:
@@ -95,9 +92,10 @@ class DomDownloader(BaseDownloader):
             content = content.replace('<br />', '\n')
         try:
             self.dom = html.fromstring(content)
-        except (UnicodeDecodeError, XMLSyntaxError):
-            self.logger.info('using beautifulsoup')
-            self.dom = Dom(lxml.html.soupparser.fromstring(content), 'soup')
+        except XMLSyntaxError as xe:
+            self.logger.exception('failed')
+            pass
+
 
     def clean_dom(self):
         cleaner = Cleaner()
@@ -157,38 +155,8 @@ class CachedDownloader(BaseDownloader):
         return '%s/%s.html' % (fullpath, filename)
 
 
-
 class CachedDomLoader(DomDownloader, CachedDownloader):
     def __init__(self):
         super(DomDownloader, self).__init__()
         l = '{}.dm.cached_dom'.format(g_config.g('logger.base'))
         self.logger = logging.getLogger(l)
-
-class Dom(object):
-    def __init__(self, html, parser):
-        self.html = html
-        self.parser = parser
-
-
-    def xpath(self, xpath):
-        if self.parser == 'soup':
-            return self.html.find(xpath)
-        else:
-            return self.html.xpath(xpath)
-
-    def call(self, method):
-        return self.html.method()
-
-
-    def make_links_absolute(self, url):
-        if self.parser != 'soup':
-            self.html.make_links_absolute(url)
-            return
-        for tag in self.html.find_all('a', href=True):
-            tag['href'] = urlparse.urljoin(url, tag['href'])
-
-def decode_html(html_string):
-    converted = UnicodeDammit(html_string)
-    if not converted.unicode_markup:
-        raise Exception('Failed to detect encoding')
-    return converted.unicode_markup
