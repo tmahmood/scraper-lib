@@ -13,6 +13,7 @@ class Server(object):
         self.host = host
         self.port = port
         self.db = SQLite()
+        self.db.query('delete from runlogs')
 
 
     def start(self):

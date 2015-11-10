@@ -12,6 +12,7 @@ import utils
 import config
 from lxml.etree import XMLSyntaxError
 from urlparse import urlparse
+import copy
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 g_config = config.Config()
@@ -50,6 +51,9 @@ class BaseDownloader(object):
                 break
             except (urllib2.URLError, urllib2.HTTPError) as e:
                 self.logger.error('error occurred {}'.format(url))
+                if e.code == 404:
+                    self.logger.info('404 error')
+                    error_count = 6
                 error_count = error_count + 1
                 if error_count > 3 and error_count < 5:
                     time.sleep(10)
@@ -95,6 +99,11 @@ class DomDownloader(BaseDownloader):
         except XMLSyntaxError as xe:
             self.logger.exception('failed')
             pass
+
+
+    def make_links_absolute(self, link):
+        self.dom_orig = copy.deepcopy(self.dom)
+        self.dom.make_links_absolute(link)
 
 
     def clean_dom(self):
