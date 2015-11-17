@@ -27,35 +27,28 @@ class SQLite(object):
             self.same_thread = True
         self.connect()
 
-
     def connect(self):
         self.db = sqlite.connect(self.dbname, self.timeout,
-                check_same_thread=self.same_thread)
-
+                                 check_same_thread=self.same_thread)
 
     def use_dict(self):
         self.db.row_factory = dict_factory
 
-
     def use_tuple(self):
         self.db.row_factory = sqlite.Row
-
 
     def close(self):
         self.db.close()
 
-
     def clear_database(self, table):
         self.query("delete from %s" % table)
 
-
     def query(self, query, commit=False):
-        cur  = self.db.cursor()
+        cur = self.db.cursor()
         cur.execute(query)
         if commit:
             self.db.commit()
         return cur
-
 
     def update(self, query, data, commit=True):
         cur = self.db.cursor()
@@ -64,24 +57,21 @@ class SQLite(object):
             self.db.commit()
         return status
 
-
     def count_rows(self, query):
         res = self.query(query)
         try:
             d = res.fetchone()
             return d[0]
-        except Exception as e:
+        except Exception:
             return 0
-
 
     def append_data(self, data, table, commit=True):
         cols = u', '.join(data.keys())
         tfields = data.keys()
-        fields = u','.join(tfields)
         types = u', '.join([(u'%s' % self.prep_char)] * len(tfields))
         q = u"INSERT INTO %s (%s) VALUES (%s)" % (table, cols, types)
         logger.debug(q)
-        retries = 0
+        retries = 10
         while True:
             try:
                 v = tuple(data.values())
@@ -95,16 +85,20 @@ class SQLite(object):
                     self.lastid = cur.lastrowid
                 return status
             except sqlite.IntegrityError as sie:
-                logger.error(sie)
+                logger.debug('IntegrityError %s', sie)
                 return -2
+            except sqlite.OperationalError as oie:
+                logger.debug('OperationalError %s', oie)
+                return -3
             except Exception as e:
                 if e[0] == 2006:
                     self.connect()
-                    continue
+                    retries -= 1
+                    if retries > 0:
+                        continue
                 logger.error(e)
                 self.lastid = None
                 raise e
-
 
     def append_all_data(self, data, table):
         for d in data:
@@ -115,7 +109,7 @@ class SQLite(object):
 def main():
     db = SQLite('db')
     db.clear_database('urls')
-    db.append_data({ 'url': 'gmail.com', 'types': 0, 'parsed': 0 }, 'urls')
+    db.append_data({'url': 'gmail.com', 'types': 0, 'parsed': 0}, 'urls')
     db.query('insert into urls (url, types, parsed) values("www.google.com", 0, 0)', True)
     db.update('update urls set parsed = 1 where url = ?', tuple(['www.google.com']))
 
