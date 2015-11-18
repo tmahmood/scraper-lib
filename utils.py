@@ -1,9 +1,7 @@
-from pprint import pprint
 import re
 import codecs
 import logging
 from libs import config
-import sys
 
 try:
     from hashlib import md5
@@ -11,6 +9,7 @@ except ImportError as e:
     from md5 import md5
 
 config = config.Config()
+
 
 def read_file(filename, linewise=False):
     try:
@@ -41,14 +40,13 @@ def append_to_file(filename, content):
 def get(arr, indx):
     try:
         return arr[indx]
-    except IndexError as e:
-        print ("error{")
-        pprint (arr)
-        print ("}")
+    except IndexError:
         return None
+
 
 def remove_extra_whitespace(txt):
     return re.sub(' +', ' ', txt)
+
 
 def cleanup_text(text):
     t = text.strip()
@@ -66,6 +64,7 @@ def clean_url(lnk, baseurl):
     lnk = lnk.replace(baseurl, '')
     return lnk.lower()
 
+
 def union(l1, l2):
     a = l1.copy()
     b = l2.copy()
@@ -73,7 +72,8 @@ def union(l1, l2):
         if e in b:
             a.remove(e)
             b.remove(e)
-    return a , b
+    return a, b
+
 
 def joindict(d1, d2):
     d = d1.copy()
@@ -85,7 +85,7 @@ def hash(url, data=None):
     """ creates hash of the url and post data (if required and exists)"""
     m = md5()
     m.update(url)
-    if data != None:
+    if data is not None:
         m.update(data)
     return m.hexdigest()
 
@@ -114,7 +114,7 @@ def dict_g(d, ky, default=False):
     keys = ky.split('.')
     k = d
     for kw in keys:
-        if not kw in k:
+        if kw not in k:
             return default
         k = k[kw]
     return k
@@ -132,9 +132,16 @@ def dict_s(d, ky, val):
                 k[kw] = None
             else:
                 k[kw] = {}
-        if type(k[kw]) != type({}):
-            print (kw)
+        if type(k[kw]).isisntance(type({})):
             k[kw] = val
             break
         else:
             k = k[kw]
+
+
+def flat_rows(listing):
+    rows = []
+    for item in listing:
+        rows.append(item[0])
+    return '\n'.join(rows)
+
