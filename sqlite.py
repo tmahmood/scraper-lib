@@ -43,7 +43,7 @@ class SQLite(object):
     def clear_database(self, table):
         self.query("delete from %s" % table)
 
-    def query(self, query, commit=False):
+    def query(self, query, commit=True):
         cur = self.db.cursor()
         cur.execute(query)
         if commit:
@@ -96,7 +96,8 @@ class SQLite(object):
                     retries -= 1
                     if retries > 0:
                         continue
-                logger.error(e)
+                logger.exception('failed inserting data')
+                logger.debug(data)
                 self.lastid = None
                 raise e
 

@@ -1,20 +1,18 @@
-import logging
 from libs import listener
-import sys
 from libs import utils
 from libs.sqlite import SQLite
 
 logger = utils.setup_logger()
+
 
 class Server(object):
     """docstring for Server"""
     def __init__(self, host, port):
         super(Server, self).__init__()
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.db = SQLite()
         self.db.query('delete from runlogs')
-
 
     def start(self):
         try:
@@ -25,6 +23,7 @@ class Server(object):
             print ("FAILED")
             print (e)
             try:
-                if conn: conn.s.close()
+                if conn:
+                    conn.s.close()
             except Exception as e:
                 pass
