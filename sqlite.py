@@ -104,7 +104,7 @@ class SQLite(object):
                     if retries > 0:
                         continue
                 logger.exception('failed inserting data')
-                logger.debug(data)
+                logger.error("%s, %s", table, data)
                 self.lastid = None
                 raise e
 
