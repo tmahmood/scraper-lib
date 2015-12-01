@@ -1,21 +1,19 @@
 import logging
 import urllib2
-import httplib
+from urllib2 import HTTPRedirectHandler, HTTPHandler, HTTPCookieProcessor
 import cookielib
-import random
-import socket
 import os
 import time
-from lxml import html, etree
-from lxml.html.clean import clean_html, Cleaner
+from lxml import html
+from lxml.html.clean import Cleaner
 import utils
 import config
 from lxml.etree import XMLSyntaxError
-from urlparse import urlparse
 import copy
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 g_config = config.Config()
+
 
 class BaseDownloader(object):
     """docstring for BaseDownloader"""
@@ -23,35 +21,34 @@ class BaseDownloader(object):
         super(BaseDownloader, self).__init__()
         l = '{}.dm'.format(g_config.g('logger.base'))
         self.logger = logging.getLogger(l)
-        self.verbose = 0
+        self.debug = 0
         self.downloads = 0
+        self.content = ''
+        self.opener = None
         self.init_opener()
 
-
     def init_opener(self):
-        if hasattr(self, 'opener'):
+        if self.opener is not None:
             self.opener.close()
             self.downloads = 0
         self.cj = cookielib.LWPCookieJar('cookie.jar')
-        self.opener = urllib2.build_opener(
-                urllib2.HTTPRedirectHandler(),
-                urllib2.HTTPHandler(debuglevel=self.verbose),
-                urllib2.HTTPCookieProcessor(self.cj),
-                )
+        self.opener = urllib2.build_opener(HTTPRedirectHandler(),
+                                           HTTPHandler(debuglevel=self.debug),
+                                           HTTPCookieProcessor(self.cj))
         self.opener.addheaders = [('User-agent', USER_AGENT)]
 
-
     def download(self, url, post=None):
-        self.content = ''
         error_count = 0
         while True:
             try:
                 response = self.opener.open(url.strip('?'), post, timeout=30)
-                content = unicode(''.join(response.readlines()), errors='ignore')
+                rtxt = ''.join(response.readlines())
+                self.url = response.url
+                content = unicode(rtxt, errors='ignore')
                 break
-            except (urllib2.URLError, urllib2.HTTPError) as e:
-                self.logger.error('error occurred {}'.format(url))
-                if e.code == 404:
+            except (urllib2.URLError, urllib2.HTTPError) as err:
+                self.logger.error('error occurred %s', url)
+                if 'code' in err and err.code == 404:
                     self.logger.info('404 error')
                     error_count = 6
                 error_count = error_count + 1
@@ -60,16 +57,15 @@ class BaseDownloader(object):
                     self.init_opener()
                     continue
                 if error_count > 5:
-                    raise e
-            except Exception as e:
-                self.logger.exception('failed to download')
-                raise e
+                    raise err
+            except Exception as err:
+                self.logger.exception('failed to download: %s', url)
+                raise err
         self.content = content
         self.last_url = response.url
         self.downloads = self.downloads + 1
         self.take_a_nap_after(10, 5)
         return True
-
 
     def take_a_nap_after(self, after, duration):
         if self.downloads % after == 0:
@@ -83,12 +79,11 @@ class DomDownloader(BaseDownloader):
         l = '{}.dm.dom'.format(g_config.g('logger.base'))
         self.logger = logging.getLogger(l)
 
-
-    def download(self, url=None, post=None, remove_br = False):
+    def download(self, url=None, post=None, remove_br=False):
         state = super(DomDownloader, self).download(url, post)
         if not state:
-           self.logger.error('download failed')
-           return None
+            self.logger.error('download failed')
+            return None
         content = self.content
         if remove_br:
             content = content.replace('<br>', '\n')
@@ -96,15 +91,13 @@ class DomDownloader(BaseDownloader):
             content = content.replace('<br />', '\n')
         try:
             self.dom = html.fromstring(content)
-        except XMLSyntaxError as xe:
+        except XMLSyntaxError:
             self.logger.exception('failed')
             pass
-
 
     def make_links_absolute(self, link):
         self.dom_orig = copy.deepcopy(self.dom)
         self.dom.make_links_absolute(link)
-
 
     def clean_dom(self):
         cleaner = Cleaner()
@@ -121,9 +114,9 @@ class CachedDownloader(BaseDownloader):
         l = '{}.dm.cached'.format(g_config.g('logger.base'))
         self.logger = logging.getLogger(l)
 
-
     def download(self, url, post=None):
         self.content = ''
+        self.url = url
         filename = utils.hash(url, post)
         fullpath = self.file_cached_path(filename, url)
         if os.path.exists(fullpath):
@@ -131,20 +124,17 @@ class CachedDownloader(BaseDownloader):
             self.from_cache = True
             return True
         self.from_cache = False
-        error = 0
         state = super(CachedDownloader, self).download(url, post)
         if state:
             utils.save_to_file(fullpath, self.content, True)
             return True
         return False
 
-
-    def clean_failed_page_cache(self, url, post = None):
+    def clean_failed_page_cache(self, url, post=None):
         filename = utils.hash(url, post)
         fullpath = self.file_cached_path(filename)
         if os.path.exists(fullpath):
             os.unlink(fullpath)
-
 
     def file_cached_path(self, filename, url=None):
         """ expects hashed filename """
@@ -156,8 +146,8 @@ class CachedDownloader(BaseDownloader):
             burl = burl.split('/')[0]
         segsize = 3
         cachepath = 'cache'
-        firstpart  = filename[0:segsize]
-        secondpart = filename[segsize : 2 * segsize]
+        firstpart = filename[0:segsize]
+        secondpart = filename[segsize: 2 * segsize]
         fullpath = "%s/%s/%s/%s" % (cachepath, burl, firstpart, secondpart)
         if not os.path.exists(fullpath):
             os.makedirs(fullpath)
@@ -166,6 +156,6 @@ class CachedDownloader(BaseDownloader):
 
 class CachedDomLoader(DomDownloader, CachedDownloader):
     def __init__(self):
-        super(DomDownloader, self).__init__()
+        super(CachedDomLoader, self).__init__()
         l = '{}.dm.cached_dom'.format(g_config.g('logger.base'))
         self.logger = logging.getLogger(l)

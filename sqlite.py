@@ -6,6 +6,7 @@ g_config = Config()
 l = '{}.sqlite'.format(g_config.g('logger.base'))
 logger = logging.getLogger(l)
 
+
 def dict_factory(cursor, row):
     d = {}
     for idx, col in enumerate(cursor.description):
@@ -45,9 +46,15 @@ class SQLite(object):
 
     def query(self, query, commit=True):
         cur = self.db.cursor()
-        cur.execute(query)
+        try:
+            cur.execute(query)
+        except sqlite.OperationalError:
+            return None
         if commit:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except sqlite.OperationalError:
+                pass
         return cur
 
     def update(self, query, data, commit=True):
@@ -84,7 +91,7 @@ class SQLite(object):
                 except Exception as e:
                     self.lastid = cur.lastrowid
                 return status
-            except sqlite.IntegrityError as sie:
+            except (sqlite.IntegrityError, sqlite.DatabaseError) as sie:
                 logger.debug('IntegrityError %s', sie)
                 return -2
             except sqlite.OperationalError as oie:
