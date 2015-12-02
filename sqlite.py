@@ -73,17 +73,15 @@ class SQLite(object):
             return 0
 
     def append_data(self, data, table, commit=True):
-        cols = u', '.join(data.keys())
-        tfields = data.keys()
-        types = u', '.join([(u'%s' % self.prep_char)] * len(tfields))
-        q = u"INSERT INTO %s (%s) VALUES (%s)" % (table, cols, types)
+        qfields = ', '.join([':%s' % key for key in data.keys()])
+        cols = ', '.join(data.keys())
+        q = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         logger.debug(q)
-        retries = 10
+        retries = 0
         while True:
             try:
-                v = tuple(data.values())
                 cur = self.db.cursor()
-                status = cur.execute(q, tuple(v))
+                status = cur.execute(q, data)
                 if commit:
                     self.db.commit()
                 try:
@@ -100,8 +98,8 @@ class SQLite(object):
             except Exception as e:
                 if e[0] == 2006:
                     self.connect()
-                    retries -= 1
-                    if retries > 0:
+                    retries += 1
+                    if retries < 5:
                         continue
                 logger.exception('failed inserting data')
                 logger.error("%s, %s", table, data)
