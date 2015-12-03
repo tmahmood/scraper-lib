@@ -44,6 +44,53 @@ class SQLite(object):
     def clear_database(self, table):
         self.query("delete from %s" % table)
 
+    def safe_query(self, qtpl, data, commit=True):
+        """Executed binding query
+        ex: select * from table where q=:s, d=:k
+
+        :query: @todo
+        :data: @todo
+        :commit: @todo
+        :returns: @todo
+
+        """
+        cur = self.db.cursor()
+        try:
+            cur.execute(qtpl, data)
+        except sqlite.OperationalError:
+            return None
+        if commit:
+            try:
+                self.db.commit()
+            except sqlite.OperationalError:
+                pass
+        return cur
+
+    def select(self, table, data=[], cols='*', at_end=''):
+        """Executes simple select query
+
+        :table: name of the table
+        :data: [col|cond|val, ...]
+        :cols: name of the columns
+        :at_end: if we want order/limit/group
+        :returns: cursor
+
+        """
+        if len(data) == 0:
+            querytpl = 'select %s from %s %s' % (cols, table, at_end)
+            logger.debug(querytpl)
+            return self.safe_query(querytpl, data)
+        conds = []
+        fdata = {}
+        for item in data:
+            col, cond, val = item.split('|', 3)
+            conds.append('%s %s=:%s' % (cond, col, col))
+            fdata[col] = val
+        querytpl = 'select %s from %s where %s %s' % (cols, table,
+                                                      ' '.join(conds), at_end)
+        logger.debug(querytpl)
+        return self.safe_query(querytpl, fdata)
+
     def query(self, query, commit=True):
         cur = self.db.cursor()
         try:
@@ -113,11 +160,30 @@ class SQLite(object):
 
 
 def main():
-    db = SQLite('db')
-    db.clear_database('urls')
-    db.append_data({'url': 'gmail.com', 'types': 0, 'parsed': 0}, 'urls')
-    db.query('insert into urls (url, types, parsed) values("www.google.com", 0, 0)', True)
-    db.update('update urls set parsed = 1 where url = ?', tuple(['www.google.com']))
+    db = SQLite()
+    db.query('create table tests( name test, si integer)')
+    db.append_data({'name': 'gmail.com', 'si': 10}, 'tests')
+    db.append_data({'name': 'inbox.com', 'si': 12}, 'tests')
+    db.append_data({'name': 'reddit.com', 'si': 1}, 'tests')
+    db.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
+    db.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
+    db.query('insert into tests (name, si) values("google.com", 10)')
+    result = db.select('tests', ['name||sgmail.com'])
+    print(result.fetchall())
+    result = db.select('tests', ['name||gmail.com'])
+    print(result.fetchall())
+    result = db.select('tests', ['si||2', 'si|or|12'])
+    print(result.fetchall())
+    result = db.select('tests', ['name||gmail.com', 'name|or|inbox.com'])
+    print(result.fetchall())
+    result = db.select('tests', ['name||reddit.com'], 'count(*)')
+    print(result.fetchall())
+    result = db.select('tests', at_end='order by si')
+    print(result.fetchall())
+    result = db.select('tests', ['name||reddit.com'], 'count(*)',
+                       at_end='group by si')
+    print(result.fetchall())
+    db.query('drop table tests')
 
 if __name__ == '__main__':
     main()

@@ -47,16 +47,18 @@ class BaseDownloader(object):
                 content = unicode(rtxt, errors='ignore')
                 break
             except (urllib2.URLError, urllib2.HTTPError) as err:
-                self.logger.error('error occurred %s', url)
+                url = url.replace(' ', '%20')
                 if 'code' in err and err.code == 404:
                     self.logger.info('404 error')
                     error_count = 6
                 error_count = error_count + 1
                 if error_count > 3 and error_count < 5:
+                    self.logger.error('error! new opener %s', url)
                     time.sleep(10)
                     self.init_opener()
                     continue
                 if error_count > 5:
+                    self.logger.exception('Too many failuers, I giveup %s', url)
                     raise err
             except Exception as err:
                 self.logger.exception('failed to download: %s', url)

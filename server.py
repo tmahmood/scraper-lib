@@ -1,7 +1,6 @@
 from libs import listener
 from libs import utils
 from libs.sqlite import SQLite
-import os
 
 logger = utils.setup_logger()
 
@@ -28,3 +27,5 @@ class Server(object):
                     conn.s.close()
             except Exception as e:
                 pass
+
+

@@ -21,7 +21,7 @@ class ConnectionThread(threading.Thread):
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.s.bind((host, port))
             logger.info('listening to %s:%s', host, port)
-            self.s.listen(5)
+            self.s.listen(3)
         except socket.error:
             self.s.close()
             sys.exit()
