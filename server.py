@@ -1,6 +1,6 @@
 from libs import listener
 from libs import utils
-from libs.sqlite import SQLite
+from libs.mysql import MySQL
 
 logger = utils.setup_logger()
 
@@ -11,7 +11,7 @@ class Server(object):
         super(Server, self).__init__()
         self.host = host
         self.port = int(port)
-        self.db = SQLite()
+        self.db = MySQL()
         self.db.query('delete from runlogs')
 
     def start(self):

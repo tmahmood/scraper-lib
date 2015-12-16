@@ -1,7 +1,9 @@
 import re
 import codecs
 import logging
-from libs import config
+import config
+import datetime
+import json
 
 try:
     from hashlib import md5
@@ -144,4 +146,20 @@ def flat_rows(listing):
     for item in listing:
         rows.append(item[0])
     return '\n'.join(rows)
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """ encode datetime to proper string for json
+        DateTimeEncoder().encode(object)
+    """
+    def default(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return obj.isoformat()
+        elif isinstance(obj, datetime.date):
+            return obj.isoformat()
+        elif isinstance(obj, datetime.timedelta):
+            return (datetime.datetime.min + obj).time().isoformat()
+        else:
+            return super(DateTimeEncoder, self).default(obj)
+
 

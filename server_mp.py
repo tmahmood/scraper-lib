@@ -1,4 +1,4 @@
-from libs.sqlite import SQLite
+from libs.mysql import MySQL
 import socket
 from inc.client import Client
 from libs import utils
@@ -12,7 +12,7 @@ class Server(object):
         super(Server, self).__init__()
         self.host = host
         self.port = int(port)
-        self.db = SQLite()
+        self.db = MySQL()
         self.db.query('update scrapers set stage = 0')
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((self.host, self.port))
