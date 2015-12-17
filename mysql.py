@@ -27,6 +27,10 @@ class MySQL(object):
         self.connect()
 
     def connect(self):
+        try:
+            self.db.close()
+        except AttributeError:
+            pass
         self.db = MySQLdb.connect(self.dbhost, self.user,
                                   self.pswd, self.dbname, charset='utf8',
                                   use_unicode=True)
@@ -43,27 +47,31 @@ class MySQL(object):
     def clear_database(self, table):
         self.query("delete from %s" % table)
 
-    def safe_query(self, qtpl, data, commit=True):
+    def safe_query(self, qtpl, data, retries=0):
         """Executed binding query
         ex: select * from table where q=:s, d=:k
 
         :query: @todo
         :data: @todo
-        :commit: @todo
         :returns: @todo
 
         """
+        logger.debug(qtpl)
+        logger.debug(data)
         cur = self.db.cursor()
         try:
             cur.execute(qtpl, data)
-        except MySQLdb.OperationalError:
-            return None
-        if commit:
-            try:
-                self.db.commit()
-            except (MySQLdb.IntegrityError, MySQLdb.OperationalError):
-                pass
-        return cur
+            self.should_commit(qtpl)
+            return cur
+        except MySQLdb.MySQLError as err:
+            if err[0] == 1062:
+                return -2
+            self.connect()
+            retries += 1
+            if retries > 5:
+                logger.exception('Failed to execute query')
+                return None
+            self.safe_query(qtpl, data, retries)
 
     def select(self, table, data=[], cols='*', at_end=''):
         """Executes simple select query
@@ -87,27 +95,29 @@ class MySQL(object):
             fdata[col] = val
         querytpl = 'select %s from %s where %s %s' % (cols, table,
                                                       ' '.join(conds), at_end)
-        logger.debug(querytpl)
         return self.safe_query(querytpl, fdata)
 
-    def query(self, query, commit=True):
+    def query(self, query):
         cur = self.db.cursor()
         try:
             cur.execute(query)
         except MySQLdb.OperationalError:
             return None
-        if commit:
-            try:
-                self.db.commit()
-            except MySQLdb.OperationalError:
-                pass
+        self.should_commit(query)
         return cur
 
-    def update(self, query, data, commit=True):
+    def should_commit(self, _query):
+        query = _query.lower()
+        insert = query.startswith('insert')
+        update = query.startswith('update')
+        delete = query.startswith('delete')
+        if insert or update or delete:
+            self.db.commit()
+
+    def update(self, query, data):
         cur = self.db.cursor()
         status = cur.execute(query, data)
-        if commit:
-            self.db.commit()
+        self.db.commit()
         return status
 
     def count_rows(self, query):
@@ -116,47 +126,47 @@ class MySQL(object):
             d = res.fetchone()
             return d[0]
         except Exception:
-            return 0
+            return None
 
-    def append_data(self, data, table, commit=True):
+    def append_data(self, data, table, retries=0):
         qfields = ', '.join(['%%(%s)s' % key for key in data.keys()])
         cols = ', '.join(data.keys())
         q = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         logger.debug(q)
-        retries = 0
         logger.debug(data)
+        retries = 0
+        cur = self.db.cursor()
         while True:
             try:
-                cur = self.db.cursor()
                 status = cur.execute(q, data)
-                if commit:
-                    self.db.commit()
                 try:
                     self.lastid = cur.insert_id()
                 except Exception as e:
                     self.lastid = cur.lastrowid
+                self.db.commit()
                 return status
-            except (MySQLdb.IntegrityError, MySQLdb.DatabaseError) as sie:
-                logger.debug('IntegrityError %s', sie)
-                return -2
-            except MySQLdb.OperationalError as oie:
-                logger.debug('OperationalError %s', oie)
-                return -3
+            except MySQLdb.MySQLError as err:
+                if err[0] == 1062:
+                    return -2
+                logger.info('reconnecting ... ')
+                self.connect()
+                retries += 1
+                if retries > 5:
+                    logger.exception('Failed to execute query')
+                    return None
+                continue
             except Exception as e:
-                if e[0] == 2006:
-                    self.connect()
-                    retries += 1
-                    if retries < 5:
-                        continue
                 logger.exception('failed inserting data')
                 logger.error("%s, %s", table, data)
                 self.lastid = None
                 raise e
+            finally:
+                if cur:
+                    cur.close()
 
     def append_all_data(self, data, table):
         for d in data:
-            self.append_data(d, table, commit=False)
-        self.db.commit()
+            self.append_data(d, table)
 
 
 def main():

@@ -98,7 +98,7 @@ def setup_logger():
     clevel = getattr(logging, config.g('logger.console.level'))
     flevel = getattr(logging, config.g('logger.file.level'))
     logger.setLevel(level)
-    fh = logging.FileHandler(config.g('logger.path'))
+    fh = logging.FileHandler(config.g('logger.path'), mode='w')
     ch = logging.StreamHandler()
     template = config.get('logger', 'template')
     fm = logging.Formatter(template)

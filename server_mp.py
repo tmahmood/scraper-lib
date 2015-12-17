@@ -1,7 +1,7 @@
-from libs.mysql import MySQL
 import socket
 from inc.client import Client
 from libs import utils
+from libs.mysql import MySQL
 
 logger = utils.setup_logger()
 
@@ -26,7 +26,7 @@ class Server(object):
             try:
                 conn, address = self.socket.accept()
                 logger.info("Got connection %s", address)
-                process = Client(conn, self.db)
+                process = Client(conn)
                 process.daemon = True
                 process.start()
             except KeyboardInterrupt:
@@ -39,3 +39,5 @@ class Server(object):
                     conn.close()
                 break
         self.socket.close()
+        self.db.query('update scrapers set stage = 0')
+
