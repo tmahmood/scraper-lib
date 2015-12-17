@@ -1,4 +1,3 @@
-import sqlite3 as sqlite
 from config import Config
 import MySQLdb
 import logging
@@ -29,7 +28,8 @@ class MySQL(object):
 
     def connect(self):
         self.db = MySQLdb.connect(self.dbhost, self.user,
-                                  self.pswd, self.dbname)
+                                  self.pswd, self.dbname, charset='utf8',
+                                  use_unicode=True)
         self.db.set_character_set('utf8')
         dbc = self.db.cursor()
         dbc.execute('SET NAMES utf8;')
@@ -56,12 +56,12 @@ class MySQL(object):
         cur = self.db.cursor()
         try:
             cur.execute(qtpl, data)
-        except sqlite.OperationalError:
+        except MySQLdb.OperationalError:
             return None
         if commit:
             try:
                 self.db.commit()
-            except sqlite.OperationalError:
+            except (MySQLdb.IntegrityError, MySQLdb.OperationalError):
                 pass
         return cur
 
@@ -94,12 +94,12 @@ class MySQL(object):
         cur = self.db.cursor()
         try:
             cur.execute(query)
-        except sqlite.OperationalError:
+        except MySQLdb.OperationalError:
             return None
         if commit:
             try:
                 self.db.commit()
-            except sqlite.OperationalError:
+            except MySQLdb.OperationalError:
                 pass
         return cur
 
@@ -136,10 +136,10 @@ class MySQL(object):
                 except Exception as e:
                     self.lastid = cur.lastrowid
                 return status
-            except (sqlite.IntegrityError, sqlite.DatabaseError) as sie:
+            except (MySQLdb.IntegrityError, MySQLdb.DatabaseError) as sie:
                 logger.debug('IntegrityError %s', sie)
                 return -2
-            except sqlite.OperationalError as oie:
+            except MySQLdb.OperationalError as oie:
                 logger.debug('OperationalError %s', oie)
                 return -3
             except Exception as e:
