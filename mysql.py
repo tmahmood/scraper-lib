@@ -44,25 +44,19 @@ class MySQL(object):
         self.query("delete from %s" % table)
 
     def safe_query(self, qtpl, data, commit=True):
-        """Executed binding query
+        """Execute binding query
+
         ex: select * from table where q=:s, d=:k
 
         :query: @todo
         :data: @todo
         :commit: @todo
         :returns: @todo
-
         """
         cur = self.db.cursor()
-        try:
-            cur.execute(qtpl, data)
-        except MySQLdb.OperationalError:
-            return None
+        cur.execute(qtpl, data)
         if commit:
-            try:
-                self.db.commit()
-            except (MySQLdb.IntegrityError, MySQLdb.OperationalError):
-                pass
+            self.db.commit()
         return cur
 
     def select(self, table, data=[], cols='*', at_end=''):
@@ -78,7 +72,7 @@ class MySQL(object):
         if len(data) == 0:
             querytpl = 'select %s from %s %s' % (cols, table, at_end)
             logger.debug(querytpl)
-            return self.safe_query(querytpl, data)
+            return self.safe_query(querytpl, data, commit=False)
         conds = []
         fdata = {}
         for item in data:
@@ -87,20 +81,15 @@ class MySQL(object):
             fdata[col] = val
         querytpl = 'select %s from %s where %s %s' % (cols, table,
                                                       ' '.join(conds), at_end)
-        logger.debug(querytpl)
-        return self.safe_query(querytpl, fdata)
+        logger.debug("%s\n%s\n%s", querytpl, data, cols)
+        return self.safe_query(querytpl, fdata, commit=False)
 
     def query(self, query, commit=True):
         cur = self.db.cursor()
-        try:
-            cur.execute(query)
-        except MySQLdb.OperationalError:
-            return None
+        logger.debug(query)
+        cur.execute(query)
         if commit:
-            try:
-                self.db.commit()
-            except MySQLdb.OperationalError:
-                pass
+            self.db.commit()
         return cur
 
     def update(self, query, data, commit=True):
@@ -112,46 +101,24 @@ class MySQL(object):
 
     def count_rows(self, query):
         res = self.query(query)
-        try:
-            d = res.fetchone()
-            return d[0]
-        except Exception:
-            return 0
+        d = res.fetchone()
+        return d[0]
 
     def append_data(self, data, table, commit=True):
         qfields = ', '.join(['%%(%s)s' % key for key in data.keys()])
         cols = ', '.join(data.keys())
         q = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         logger.debug(q)
-        retries = 0
         logger.debug(data)
-        while True:
-            try:
-                cur = self.db.cursor()
-                status = cur.execute(q, data)
-                if commit:
-                    self.db.commit()
-                try:
-                    self.lastid = cur.insert_id()
-                except Exception as e:
-                    self.lastid = cur.lastrowid
-                return status
-            except (MySQLdb.IntegrityError, MySQLdb.DatabaseError) as sie:
-                logger.debug('IntegrityError %s', sie)
-                return -2
-            except MySQLdb.OperationalError as oie:
-                logger.debug('OperationalError %s', oie)
-                return -3
-            except Exception as e:
-                if e[0] == 2006:
-                    self.connect()
-                    retries += 1
-                    if retries < 5:
-                        continue
-                logger.exception('failed inserting data')
-                logger.error("%s, %s", table, data)
-                self.lastid = None
-                raise e
+        cur = self.db.cursor()
+        status = cur.execute(q, data)
+        if commit:
+            self.db.commit()
+        try:
+            self.lastid = cur.insert_id()
+        except Exception:
+            self.lastid = cur.lastrowid
+        return status
 
     def append_all_data(self, data, table):
         for d in data:
