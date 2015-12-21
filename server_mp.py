@@ -22,22 +22,26 @@ class Server(object):
     def start(self):
         """everything starts here
         """
-        while True:
-            try:
-                conn, address = self.socket.accept()
-                logger.info("Got connection %s", address)
-                process = Client(conn)
-                process.daemon = True
-                process.start()
-            except KeyboardInterrupt:
-                if conn:
-                    conn.close()
-                break
-            except Exception:
-                logger.exception("FAILED")
-                if conn:
-                    conn.close()
-                break
-        self.socket.close()
-        self.db.query('update scrapers set stage = 0')
+        try:
+            while True:
+                try:
+                    conn, address = self.socket.accept()
+                    logger.info("Got connection %s", address)
+                    process = Client(conn)
+                    process.daemon = True
+                    process.start()
+                except KeyboardInterrupt:
+                    if conn:
+                        conn.close()
+                    break
+                except Exception:
+                    logger.exception("FAILED")
+                    if conn:
+                        conn.close()
+                    break
+        except Exception:
+            logger.exception("server out ...")
+        finally:
+            self.socket.close()
+            self.db.query('update scrapers set stage = 0')
 
