@@ -86,7 +86,7 @@ class MySQL(object):
         if len(data) == 0:
             querytpl = 'select %s from %s %s' % (cols, table, at_end)
             logger.debug(querytpl)
-            return self.safe_query(querytpl, data)
+            return self.safe_query(querytpl, data, commit=False)
         conds = []
         fdata = {}
         for item in data:
@@ -95,15 +95,27 @@ class MySQL(object):
             fdata[col] = val
         querytpl = 'select %s from %s where %s %s' % (cols, table,
                                                       ' '.join(conds), at_end)
+<<<<<<< HEAD
         return self.safe_query(querytpl, fdata)
+=======
+        logger.debug("%s\n%s\n%s", querytpl, data, cols)
+        return self.safe_query(querytpl, fdata, commit=False)
+>>>>>>> 6a1bb16ee1f9d9c91a410a51123bcb9fed12632d
 
     def query(self, query):
         cur = self.db.cursor()
+<<<<<<< HEAD
         try:
             cur.execute(query)
         except MySQLdb.OperationalError:
             return None
         self.should_commit(query)
+=======
+        logger.debug(query)
+        cur.execute(query)
+        if commit:
+            self.db.commit()
+>>>>>>> 6a1bb16ee1f9d9c91a410a51123bcb9fed12632d
         return cur
 
     def should_commit(self, _query):
@@ -122,11 +134,16 @@ class MySQL(object):
 
     def count_rows(self, query):
         res = self.query(query)
+<<<<<<< HEAD
         try:
             d = res.fetchone()
             return d[0]
         except Exception:
             return None
+=======
+        d = res.fetchone()
+        return d[0]
+>>>>>>> 6a1bb16ee1f9d9c91a410a51123bcb9fed12632d
 
     def append_data(self, data, table, retries=0):
         qfields = ', '.join(['%%(%s)s' % key for key in data.keys()])
@@ -134,6 +151,7 @@ class MySQL(object):
         q = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         logger.debug(q)
         logger.debug(data)
+<<<<<<< HEAD
         retries = 0
         cur = self.db.cursor()
         while True:
@@ -163,6 +181,17 @@ class MySQL(object):
             finally:
                 if cur:
                     cur.close()
+=======
+        cur = self.db.cursor()
+        status = cur.execute(q, data)
+        if commit:
+            self.db.commit()
+        try:
+            self.lastid = cur.insert_id()
+        except Exception:
+            self.lastid = cur.lastrowid
+        return status
+>>>>>>> 6a1bb16ee1f9d9c91a410a51123bcb9fed12632d
 
     def append_all_data(self, data, table):
         for d in data:
