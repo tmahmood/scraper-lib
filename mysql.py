@@ -20,6 +20,7 @@ class MySQL(object):
     def __init__(self):
         super(MySQL, self).__init__()
         self.prep_char = '?'
+        self.lastid = None
         self.dbhost = g_config.g('db.mysql.host')
         self.user = g_config.g('db.mysql.user')
         self.pswd = g_config.g('db.mysql.pass')
@@ -27,6 +28,9 @@ class MySQL(object):
         self.connect()
 
     def connect(self):
+        """
+        connects to database
+        """
         try:
             self.db.close()
         except AttributeError:
@@ -41,10 +45,16 @@ class MySQL(object):
         dbc.execute('SET character_set_connection=utf8;')
 
     def close(self):
-        # self.db.close()
-        return
+        """
+        closes the database, don't use it,
+        close database directly by self.db.close()
+        """
+        self.db.close()
 
     def clear_database(self, table):
+        """
+        clears given table
+        """
         self.query("delete from %s" % table)
 
     def safe_query(self, qtpl, data, retries=0):
@@ -73,7 +83,7 @@ class MySQL(object):
                 return None
             self.safe_query(qtpl, data, retries)
 
-    def select(self, table, data=[], cols='*', at_end=''):
+    def select(self, table, data=None, cols='*', at_end=''):
         """Executes simple select query
 
         :table: name of the table
@@ -83,7 +93,7 @@ class MySQL(object):
         :returns: cursor
 
         """
-        if len(data) == 0:
+        if data is None or len(data) == 0:
             querytpl = 'select %s from %s %s' % (cols, table, at_end)
             logger.debug(querytpl)
             return self.safe_query(querytpl, data)
@@ -98,6 +108,9 @@ class MySQL(object):
         return self.safe_query(querytpl, fdata)
 
     def query(self, query):
+        """
+        Runs a query in unsafe way
+        """
         cur = self.db.cursor()
         try:
             cur.execute(query)
@@ -107,6 +120,9 @@ class MySQL(object):
         return cur
 
     def should_commit(self, _query):
+        """
+        determine if the query needs to be committed
+        """
         query = _query.lower()
         insert = query.startswith('insert')
         update = query.startswith('update')
@@ -114,34 +130,34 @@ class MySQL(object):
         if insert or update or delete:
             self.db.commit()
 
-    def update(self, query, data):
-        cur = self.db.cursor()
-        status = cur.execute(query, data)
-        self.db.commit()
-        return status
-
     def count_rows(self, query):
+        """
+        counts row using given query
+        """
         res = self.query(query)
         try:
-            d = res.fetchone()
-            return d[0]
+            result = res.fetchone()
+            return result[0]
         except Exception:
             return None
 
     def append_data(self, data, table, retries=0):
+        """
+        adds row to database
+        """
         qfields = ', '.join(['%%(%s)s' % key for key in data.keys()])
         cols = ', '.join(data.keys())
-        q = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
-        logger.debug(q)
+        query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
+        logger.debug(query)
         logger.debug(data)
         retries = 0
         cur = self.db.cursor()
         while True:
             try:
-                status = cur.execute(q, data)
+                status = cur.execute(query, data)
                 try:
                     self.lastid = cur.insert_id()
-                except Exception as e:
+                except Exception:
                     self.lastid = cur.lastrowid
                 self.db.commit()
                 return status
@@ -155,21 +171,27 @@ class MySQL(object):
                     logger.exception('Failed to execute query')
                     return None
                 continue
-            except Exception as e:
+            except Exception as exp:
                 logger.exception('failed inserting data')
                 logger.error("%s, %s", table, data)
                 self.lastid = None
-                raise e
+                raise exp
             finally:
                 if cur:
                     cur.close()
 
     def append_all_data(self, data, table):
-        for d in data:
-            self.append_data(d, table)
+        """
+        adds multiple rows
+        """
+        for row in data:
+            self.append_data(row, table)
 
 
 def main():
+    """
+    do some tests
+    """
     db = MySQL()
     try:
         db.query('create table tests( name varchar(20), si integer)')
