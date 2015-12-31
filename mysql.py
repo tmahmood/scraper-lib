@@ -100,7 +100,7 @@ class MySQL(object):
         conds = []
         fdata = {}
         for item in data:
-            col, cond, val = item.split('|', 3)
+            col, cond, val = item.split('|', 2) # 2 + 1 splits
             conds.append('%s %s=%%(%s)s' % (cond, col, col))
             fdata[col] = val
         querytpl = 'select %s from %s where %s %s' % (cols, table,
