@@ -1,6 +1,7 @@
 import logging
 import urllib2
-from urllib2 import HTTPRedirectHandler, HTTPHandler, HTTPCookieProcessor
+from urllib2 import HTTPRedirectHandler, HTTPHandler, \
+                    HTTPCookieProcessor, HTTPSHandler
 import cookielib
 import os
 import time
@@ -10,6 +11,7 @@ import utils
 import config
 from lxml.etree import XMLSyntaxError
 import copy
+import ssl
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 g_config = config.Config()
@@ -32,9 +34,11 @@ class BaseDownloader(object):
             self.opener.close()
             self.downloads = 0
         self.cj = cookielib.LWPCookieJar('cookie.jar')
+        sslhandler = HTTPSHandler(context=ssl.SSLContext(ssl.PROTOCOL_SSLv3))
         self.opener = urllib2.build_opener(HTTPRedirectHandler(),
                                            HTTPHandler(debuglevel=self.debug),
-                                           HTTPCookieProcessor(self.cj))
+                                           HTTPCookieProcessor(self.cj),
+                                           sslhandler)
         self.opener.addheaders = [('User-agent', USER_AGENT)]
 
     def download(self, url, post=None):
