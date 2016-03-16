@@ -34,7 +34,7 @@ class BaseDownloader(object):
             self.opener.close()
             self.downloads = 0
         self.cj = cookielib.LWPCookieJar('cookie.jar')
-        sslhandler = HTTPSHandler(context=ssl.SSLContext(ssl.PROTOCOL_SSLv3))
+        sslhandler = HTTPSHandler(context=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
         self.opener = urllib2.build_opener(HTTPRedirectHandler(),
                                            HTTPHandler(debuglevel=self.debug),
                                            HTTPCookieProcessor(self.cj),
