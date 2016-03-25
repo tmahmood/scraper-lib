@@ -1,10 +1,11 @@
 from config import Config
 import MySQLdb
 import logging
+import pprint
 
 
-g_config = Config()
-l = '{}.mysql'.format(g_config.g('logger.base'))
+CFG = Config()
+l = '{}.mysql'.format(CFG.g('logger.base'))
 logger = logging.getLogger(l)
 
 
@@ -17,14 +18,16 @@ def dict_factory(cursor, row):
 
 class MySQL(object):
     """ stores data in a MySQL table """
-    def __init__(self):
+    def __init__(self, config=None):
         super(MySQL, self).__init__()
+        if config == None:
+            config = CFG
         self.prep_char = '?'
         self.lastid = None
-        self.dbhost = g_config.g('db.mysql.host')
-        self.user = g_config.g('db.mysql.user')
-        self.pswd = g_config.g('db.mysql.pass')
-        self.dbname = g_config.g('db.mysql.database')
+        self.dbhost = config.g('db.mysql.host')
+        self.user = config.g('db.mysql.user')
+        self.pswd = config.g('db.mysql.pass')
+        self.dbname = config.g('db.mysql.database')
         self.connect()
 
     def connect(self):
@@ -148,13 +151,42 @@ class MySQL(object):
         qfields = ', '.join(['%%(%s)s' % key for key in data.keys()])
         cols = ', '.join(data.keys())
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
+        return self.execute_query(data, query)
+
+    def append_all_data(self, data, table):
+        """
+        adds multiple rows
+        """
+        qfields = ', '.join(['%%(%s)s' % key for key in data[0].keys()])
+        cols = ', '.join(data[0].keys())
+        query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
+        state = self.execute_query(data, query, True)
+        if state == -2:
+            for row in data:
+                self.append_data(row, table)
+        else:
+            return state
+        return True
+
+    def execute_query(self, data, query, many=False):
+        """execute query
+
+        :data: @todo
+        :table: @todo
+        :many: @todo
+        :returns: @todo
+
+        """
         logger.debug(query)
         logger.debug(data)
         retries = 0
         cur = self.db.cursor()
         while True:
             try:
-                status = cur.execute(query, data)
+                if many:
+                    status = cur.executemany(query, data)
+                else:
+                    status = cur.execute(query, data)
                 try:
                     self.lastid = cur.insert_id()
                 except Exception:
@@ -179,13 +211,6 @@ class MySQL(object):
             finally:
                 if cur:
                     cur.close()
-
-    def append_all_data(self, data, table):
-        """
-        adds multiple rows
-        """
-        for row in data:
-            self.append_data(row, table)
 
 
 def main():
@@ -230,6 +255,6 @@ def main():
 if __name__ == '__main__':
     from utils import setup_logger
     base_logger = setup_logger()
-    l = '{}.mysql'.format(g_config.g('logger.base'))
+    l = '{}.mysql'.format(CFG.g('logger.base'))
     logger = logging.getLogger(l)
     main()
