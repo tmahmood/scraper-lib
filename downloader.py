@@ -14,15 +14,18 @@ import copy
 import ssl
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
+SLEEP_AFTER = 10
+SLEEP = 3
 g_config = config.Config()
+logger = None
 
 
 class BaseDownloader(object):
     """docstring for BaseDownloader"""
     def __init__(self):
         super(BaseDownloader, self).__init__()
-        l = '{}.dm'.format(g_config.g('logger.base'))
-        self.logger = logging.getLogger(l)
+        global logger
+        logger = logging.getLogger('{}.dm'.format(g_config.g('logger.base')))
         self.debug = 0
         self.downloads = 0
         self.content = ''
@@ -53,24 +56,24 @@ class BaseDownloader(object):
             except (urllib2.URLError, urllib2.HTTPError) as err:
                 url = url.replace(' ', '%20')
                 if 'code' in err and err.code == 404:
-                    self.logger.info('404 error')
+                    logger.info('404 error')
                     error_count = 6
                 error_count = error_count + 1
                 if error_count > 3 and error_count < 5:
-                    self.logger.error('error! new opener %s', url)
+                    logger.error('error! new opener %s', url)
                     time.sleep(10)
                     self.init_opener()
                     continue
                 if error_count > 5:
-                    self.logger.exception('Too many failuers, I giveup %s', url)
+                    logger.exception('Too many failuers, I giveup %s', url)
                     raise err
             except Exception as err:
-                self.logger.exception('failed to download: %s', url)
+                logger.exception('failed to download: %s', url)
                 raise err
         self.content = content
         self.last_url = response.url
         self.downloads = self.downloads + 1
-        self.take_a_nap_after(10, 5)
+        self.take_a_nap_after(SLEEP_AFTER, SLEEP)
         return True
 
     def take_a_nap_after(self, after, duration):
@@ -82,13 +85,13 @@ class DomDownloader(BaseDownloader):
 
     def __init__(self):
         super(DomDownloader, self).__init__()
-        l = '{}.dm.dom'.format(g_config.g('logger.base'))
-        self.logger = logging.getLogger(l)
+        global logger
+        logger = logging.getLogger('{}.dm.dom'.format(g_config.g('logger.base')))
 
     def download(self, url=None, post=None, remove_br=False):
         state = super(DomDownloader, self).download(url, post)
         if not state:
-            self.logger.error('download failed')
+            logger.error('download failed')
             return None
         content = self.content
         if remove_br:
@@ -98,7 +101,7 @@ class DomDownloader(BaseDownloader):
         try:
             self.dom = html.fromstring(content)
         except XMLSyntaxError:
-            self.logger.exception('failed')
+            logger.exception('failed')
             pass
 
     def make_links_absolute(self, link):
@@ -117,8 +120,8 @@ class CachedDownloader(BaseDownloader):
 
     def __init__(self):
         super(CachedDownloader, self).__init__()
-        l = '{}.dm.cached'.format(g_config.g('logger.base'))
-        self.logger = logging.getLogger(l)
+        global logger
+        logger = logging.getLogger('{}.dm.cached'.format(g_config.g('logger.base')))
 
     def download(self, url, post=None):
         self.content = ''
@@ -163,5 +166,5 @@ class CachedDownloader(BaseDownloader):
 class CachedDomLoader(DomDownloader, CachedDownloader):
     def __init__(self):
         super(CachedDomLoader, self).__init__()
-        l = '{}.dm.cached_dom'.format(g_config.g('logger.base'))
-        self.logger = logging.getLogger(l)
+        global logger
+        logger = logging.getLogger('{}.dm.cached_dom'.format(g_config.g('logger.base')))
