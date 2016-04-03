@@ -54,7 +54,9 @@ class BaseDownloader(object):
                 content = unicode(rtxt, errors='ignore')
                 break
             except (urllib2.URLError, urllib2.HTTPError) as err:
-                url = url.replace(' ', '%20')
+                url = url.replace(' ', '%20').lower()
+                url = url.replace('<br%20>', '')
+                url = url.replace('<br%20/>', '')
                 if 'code' in err and err.code == 404:
                     logger.info('404 error')
                     error_count = 6
@@ -98,6 +100,7 @@ class DomDownloader(BaseDownloader):
             content = content.replace('<br>', '\n')
             content = content.replace('</br>', '\n')
             content = content.replace('<br />', '\n')
+            content = content.replace('<br%20/>', '\n')
         try:
             self.dom = html.fromstring(content)
         except XMLSyntaxError:

@@ -196,6 +196,7 @@ class MySQL(object):
             except MySQLdb.MySQLError as err:
                 if err[0] == 1062:
                     return -2
+                logger.exception(err)
                 logger.info('reconnecting ... ')
                 self.connect()
                 retries += 1
@@ -205,7 +206,6 @@ class MySQL(object):
                 continue
             except Exception as exp:
                 logger.exception('failed inserting data')
-                logger.error("%s, %s", table, data)
                 self.lastid = None
                 raise exp
             finally:

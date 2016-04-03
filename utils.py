@@ -163,3 +163,20 @@ class DateTimeEncoder(json.JSONEncoder):
             return super(DateTimeEncoder, self).default(obj)
 
 
+def delete_folder_content(folder, delete_parent=False):
+    """delete a folders content
+
+    :folder: @todo
+    :returns: @todo
+
+    """
+    import os
+    for the_file in os.listdir(folder):
+        file_path = os.path.join(folder, the_file)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+        except Exception as e:
+            print(e)
+    if delete_parent:
+        os.unlink(folder)
