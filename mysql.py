@@ -181,36 +181,37 @@ class MySQL(object):
         logger.debug(data)
         retries = 0
         cur = self.db.cursor()
-        while True:
-            try:
-                if many:
-                    status = cur.executemany(query, data)
-                else:
-                    status = cur.execute(query, data)
+        try:
+            while True:
                 try:
-                    self.lastid = cur.insert_id()
-                except Exception:
-                    self.lastid = cur.lastrowid
-                self.db.commit()
-                return status
-            except MySQLdb.MySQLError as err:
-                if err[0] == 1062:
-                    return -2
-                logger.exception(err)
-                logger.info('reconnecting ... ')
-                self.connect()
-                retries += 1
-                if retries > 5:
-                    logger.exception('Failed to execute query')
-                    return None
-                continue
-            except Exception as exp:
-                logger.exception('failed inserting data')
-                self.lastid = None
-                raise exp
-            finally:
-                if cur:
-                    cur.close()
+                    if many:
+                        status = cur.executemany(query, data)
+                    else:
+                        status = cur.execute(query, data)
+                    try:
+                        self.lastid = cur.insert_id()
+                    except Exception:
+                        self.lastid = cur.lastrowid
+                    self.db.commit()
+                    return status
+                except MySQLdb.MySQLError as err:
+                    if err[0] == 1062:
+                        return -2
+                    logger.exception(err)
+                    logger.info('reconnecting ... ')
+                    self.connect()
+                    retries += 1
+                    if retries > 5:
+                        logger.exception('Failed to execute query')
+                        return None
+                    continue
+                except Exception as exp:
+                    logger.exception('failed inserting data')
+                    self.lastid = None
+                    raise exp
+        finally:
+            if cur:
+                cur.close()
 
 
 def main():
