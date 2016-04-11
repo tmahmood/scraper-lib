@@ -21,6 +21,7 @@ class Server(object):
 
     def start(self):
         """everything starts here
+
         """
         try:
             while True:
@@ -42,6 +43,7 @@ class Server(object):
         except Exception:
             logger.exception("server out ...")
         finally:
+            logger.info('cleaning up')
+            utils.delete_folder_content('cache/queries')
             self.socket.close()
             self.db.query('update scrapers set stage = 0')
-

@@ -178,7 +178,6 @@ class MySQL(object):
 
         """
         logger.debug(query)
-        logger.debug(data)
         retries = 0
         cur = self.db.cursor()
         try:

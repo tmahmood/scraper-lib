@@ -1,17 +1,13 @@
+import config
+import copy
 import logging
-import urllib2
-from urllib2 import HTTPRedirectHandler, HTTPHandler, \
-                    HTTPCookieProcessor, HTTPSHandler
-import cookielib
-import os
-import time
+from lxml.etree import XMLSyntaxError
 from lxml import html
 from lxml.html.clean import Cleaner
+import os
+import requests
+import time
 import utils
-import config
-from lxml.etree import XMLSyntaxError
-import copy
-import ssl
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 SLEEP_AFTER = 10
@@ -29,49 +25,51 @@ class BaseDownloader(object):
         self.debug = 0
         self.downloads = 0
         self.content = ''
+        self.status_code = 'N/A'
         self.opener = None
-        self.init_opener()
+        self.testing = False
+        self.headers = {'USER_AGENT': USER_AGENT}
 
-    def init_opener(self):
-        if self.opener is not None:
-            self.opener.close()
-            self.downloads = 0
-        self.cj = cookielib.LWPCookieJar('cookie.jar')
-        sslhandler = HTTPSHandler(context=ssl.SSLContext(ssl.PROTOCOL_SSLv23))
-        self.opener = urllib2.build_opener(HTTPRedirectHandler(),
-                                           HTTPHandler(debuglevel=self.debug),
-                                           HTTPCookieProcessor(self.cj),
-                                           sslhandler)
-        self.opener.addheaders = [('User-agent', USER_AGENT)]
+    def check_return(self, err):
+        if self.testing:
+            return False
+        else:
+            raise err
 
     def download(self, url, post=None):
         error_count = 0
         while True:
             try:
-                response = self.opener.open(url.strip('?'), post, timeout=30)
-                rtxt = ''.join(response.readlines())
-                self.url = response.url
-                content = unicode(rtxt, errors='ignore')
+                with requests.Session() as s:
+                    s.headers.update(self.headers)
+                    if post != None:
+                        response = s.post(url, post)
+                    else:
+                        response = s.get(url)
+                    self.status_code = response.status_code
+                    self.url = response.url
+                    content = response.text
                 break
-            except (urllib2.URLError, urllib2.HTTPError) as err:
+            except requests.ConnectionError as err:
                 url = url.replace(' ', '%20').lower()
                 url = url.replace('<br%20>', '')
                 url = url.replace('<br%20/>', '')
-                if 'code' in err and err.code == 404:
-                    logger.info('404 error')
-                    error_count = 6
+                if 'code' in err:
+                    self.status_code = err.code
+                    logger.info('received code: %s', error)
+                    if err.code == 404:
+                        error_count = 6
                 error_count = error_count + 1
                 if error_count > 3 and error_count < 5:
-                    logger.error('error! new opener %s', url)
+                    logger.error('error! will retry %s', url)
                     time.sleep(10)
-                    self.init_opener()
                     continue
                 if error_count > 5:
                     logger.exception('Too many failuers, I giveup %s', url)
-                    raise err
+                    return self.check_return(err)
             except Exception as err:
                 logger.exception('failed to download: %s', url)
-                raise err
+                return self.check_return(err)
         self.content = content
         self.last_url = response.url
         self.downloads = self.downloads + 1
@@ -104,7 +102,7 @@ class DomDownloader(BaseDownloader):
         try:
             self.dom = html.fromstring(content)
         except XMLSyntaxError:
-            logger.exception('failed')
+            logger.exception()
             pass
 
     def make_links_absolute(self, link):
