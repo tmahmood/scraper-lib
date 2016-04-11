@@ -1,6 +1,7 @@
 import re
 import codecs
 import logging
+import logging.handlers
 import config
 import datetime
 import json
@@ -98,7 +99,11 @@ def setup_logger():
     clevel = getattr(logging, config.g('logger.console.level'))
     flevel = getattr(logging, config.g('logger.file.level'))
     logger.setLevel(level)
-    fh = logging.FileHandler(config.g('logger.path'), mode='w')
+    maxsize = config.g('logger.backupsize', default=33554432)
+    fh = logging.handlers.RotatingFileHandler(config.g('logger.path'),
+                                              mode='w',
+                                              maxBytes=maxsize,
+                                              backupCount=2)
     ch = logging.StreamHandler()
     template = config.get('logger', 'template')
     fm = logging.Formatter(template)
