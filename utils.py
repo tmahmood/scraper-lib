@@ -99,31 +99,32 @@ def setup_logger():
     clevel = getattr(logging, config.g('logger.console.level'))
     flevel = getattr(logging, config.g('logger.file.level'))
     logger.setLevel(level)
+    logfilepath = config.g('logger.path')
     maxsize = config.g('logger.backupsize', default=33554432)
-    fh = logging.handlers.RotatingFileHandler(config.g('logger.path'),
+    filehandler = logging.handlers.RotatingFileHandler(logfilepath,
                                               mode='w',
                                               maxBytes=maxsize,
                                               backupCount=2)
-    ch = logging.StreamHandler()
+    consolehandler = logging.StreamHandler()
     template = config.get('logger', 'template')
-    fm = logging.Formatter(template)
-    fm.datefmt = config.g('logger.datefmt')
-    fh.setFormatter(fm)
-    ch.setFormatter(fm)
-    ch.setLevel(clevel)
-    fh.setLevel(flevel)
-    logger.addHandler(fh)
-    logger.addHandler(ch)
+    formatter = logging.Formatter(template)
+    formatter.datefmt = config.g('logger.datefmt')
+    filehandler.setFormatter(formatter)
+    consolehandler.setFormatter(formatter)
+    consolehandler.setLevel(clevel)
+    filehandler.setLevel(flevel)
+    logger.addHandler(filehandler)
+    logger.addHandler(consolehandler)
     return logger
 
 
-def dict_g(d, ky, default=False):
-    keys = ky.split('.')
-    k = d
-    for kw in keys:
-        if kw not in k:
+def dict_g(dct, key, default=False):
+    keys = key.split('.')
+    k = dct
+    for kwrd in keys:
+        if kwrd not in k:
             return default
-        k = k[kw]
+        k = k[kwrd]
     return k
 
 
@@ -157,6 +158,7 @@ class DateTimeEncoder(json.JSONEncoder):
     """ encode datetime to proper string for json
         DateTimeEncoder().encode(object)
     """
+
     def default(self, obj):
         if isinstance(obj, datetime.datetime):
             return obj.isoformat()

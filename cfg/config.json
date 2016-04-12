@@ -1,11 +1,13 @@
 {
+	"caching": "yes",
 	"logger": {
 		"template" : "%(asctime)s - %(levelname)-6s - %(name)s - %(lineno)d - %(message)s",
 		"path": "logs/app.log",
 		"base": "app_name",
 		"level": "DEBUG",
 		"console": { "level": "INFO" },
-		"file": { "level": "DEBUG" }
+		"file": { "level": "DEBUG" },
+		"backupsize": 33554432
 	},
 	"db": {
 		"sqlite": {
