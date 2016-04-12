@@ -1,9 +1,9 @@
-import re
+from datetime import datetime
 import codecs
 import logging
 import logging.handlers
-import config
-import datetime
+import libs.config as config
+import re
 import json
 
 try:
@@ -15,6 +15,10 @@ config = config.Config()
 
 
 def read_file(filename, linewise=False):
+    """
+    reads a file, either as string or by line
+
+    """
     try:
         with open(filename) as fptr:
             content = fptr.read().strip()
@@ -29,7 +33,10 @@ def read_file(filename, linewise=False):
 def save_to_file(filename, content, use_codec=False):
     if use_codec:
         with codecs.open(filename, encoding='utf-8', mode='w') as fp:
-            fp.write(unicode(content))
+            try:
+                fp.write(unicode(content))
+            except NameError:
+                fp.write(content.encode('utf-8'))
     else:
         with open(filename, mode='w') as fp:
             fp.write(content)
@@ -87,7 +94,7 @@ def joindict(d1, d2):
 def hash(url, data=None):
     """ creates hash of the url and post data (if required and exists)"""
     m = md5()
-    m.update(url)
+    m.update(url.encode('utf-8'))
     if data is not None:
         m.update(data)
     return m.hexdigest()
@@ -152,6 +159,26 @@ def flat_rows(listing):
     for item in listing:
         rows.append(item[0])
     return '\n'.join(rows)
+
+
+def search_line_in_file(filename, text):
+    """searchs a text linewise in a file
+
+    :filename: @todo
+    :text: @todo
+    :returns: @todo
+
+    """
+    with open(filename) as f:
+        return text in f
+    return False
+
+def get_timestamp():
+    """get current unix timestamp
+    :returns: @todo
+
+    """
+    return (datetime.now() - datetime(1970, 1, 1)).total_seconds()
 
 
 class DateTimeEncoder(json.JSONEncoder):

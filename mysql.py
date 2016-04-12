@@ -1,7 +1,6 @@
-from config import Config
+from libs.config import Config
 import MySQLdb
 import logging
-import pprint
 
 
 CFG = Config()

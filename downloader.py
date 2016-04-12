@@ -1,4 +1,4 @@
-import config
+import libs.config as config
 import copy
 import logging
 from lxml.etree import XMLSyntaxError
@@ -7,7 +7,7 @@ from lxml.html.clean import Cleaner
 import os
 import requests
 import time
-import utils
+import libs.utils as utils
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 SLEEP_AFTER = 10
@@ -25,6 +25,7 @@ class BaseDownloader(object):
         self.debug = 0
         self.downloads = 0
         self.content = ''
+        self.content_non_unicode = ''
         self.status_code = 'N/A'
         self.opener = None
         self.testing = False
@@ -49,6 +50,7 @@ class BaseDownloader(object):
                     self.status_code = response.status_code
                     self.url = response.url
                     content = response.text
+                    content_non_unicode = response.content
                 break
             except requests.ConnectionError as err:
                 url = url.replace(' ', '%20').lower()
@@ -71,6 +73,7 @@ class BaseDownloader(object):
                 logger.exception('failed to download: %s', url)
                 return self.check_return(err)
         self.content = content
+        self.content_non_unicode = content_non_unicode
         self.last_url = response.url
         self.downloads = self.downloads + 1
         self.take_a_nap_after(SLEEP_AFTER, SLEEP)
@@ -88,22 +91,35 @@ class DomDownloader(BaseDownloader):
         global logger
         logger = logging.getLogger('{}.dm.dom'.format(g_config.g('logger.base')))
 
+    def remove_br(self, content):
+        """removes <br> tag
+
+        :content: @todo
+        :returns: @todo
+
+        """
+        content = content.replace('<br>', '\n')
+        content = content.replace('</br>', '\n')
+        content = content.replace('<br />', '\n')
+        content = content.replace('<br%20/>', '\n')
+
     def download(self, url=None, post=None, remove_br=False):
         state = super(DomDownloader, self).download(url, post)
         if not state:
             logger.error('download failed')
             return None
         content = self.content
-        if remove_br:
-            content = content.replace('<br>', '\n')
-            content = content.replace('</br>', '\n')
-            content = content.replace('<br />', '\n')
-            content = content.replace('<br%20/>', '\n')
-        try:
-            self.dom = html.fromstring(content)
-        except XMLSyntaxError:
-            logger.exception()
-            pass
+        while True:
+            try:
+                if remove_br:
+                    self.remove_br(content)
+                self.dom = html.fromstring(content)
+                break
+            except ValueError:
+                content = self.content_non_unicode
+            except XMLSyntaxError:
+                logger.exception('failed parsing content')
+                break
 
     def make_links_absolute(self, link):
         self.dom_orig = copy.deepcopy(self.dom)
