@@ -1,6 +1,12 @@
-from libs.config import Config
+try:
+    from libs.config import Config
+    from libs.dbbase import DBBase
+except ImportError:
+    from config import Config
+    from dbbase import DBBase
 import MySQLdb
 import logging
+import unittest
 
 
 CFG = Config()
@@ -15,7 +21,7 @@ def dict_factory(cursor, row):
     return d
 
 
-class MySQL(object):
+class MySQL(DBBase):
     """ stores data in a MySQL table """
     def __init__(self, config=None):
         super(MySQL, self).__init__()
@@ -59,7 +65,7 @@ class MySQL(object):
         """
         self.query("delete from %s" % table)
 
-    def safe_query(self, qtpl, data, retries=0):
+    def safe_query(self, qtpl, data):
         """Executed binding query
         ex: select * from table where q=:s, d=:k
 
@@ -68,95 +74,63 @@ class MySQL(object):
         :returns: @todo
 
         """
-        logger.debug(qtpl)
-        logger.debug(data)
-        cur = self.db.cursor()
-        try:
-            cur.execute(qtpl, data)
-            self.should_commit(qtpl)
-            return cur
-        except MySQLdb.MySQLError as err:
-            if err[0] == 1062:
-                return -2
-            self.connect()
-            retries += 1
-            if retries > 5:
-                logger.exception('Failed to execute query')
-                return None
-            self.safe_query(qtpl, data, retries)
+        while True:
+            try:
+                return self.do_query(qtpl, data)
+            except MySQLdb.MySQLError as err:
+                if err[0] == 1062:
+                    return -2
+                self.connect()
+                retries += 1
+                if retries > 5:
+                    logger.exception('Failed to execute query')
+                    return None
 
-    def select(self, table, data=None, cols='*', at_end=''):
-        """Executes simple select query
+    def make_condition(self, cond, col, col_name):
+        """builds appropiate query
 
-        :table: name of the table
-        :data: [col|cond|val, ...]
-        :cols: name of the columns
-        :at_end: if we want order/limit/group
-        :returns: cursor
+        :cond: @todo
+        :col: @todo
+        :col: @todo
+        :returns: @todo
 
         """
-        if data is None or len(data) == 0:
-            querytpl = 'select %s from %s %s' % (cols, table, at_end)
-            logger.debug(querytpl)
-            return self.safe_query(querytpl, data)
-        conds = []
-        fdata = {}
-        for item in data:
-            col, cond, val = item.split('|', 2) # 2 + 1 splits
-            conds.append('%s %s=%%(%s)s' % (cond, col, col))
-            fdata[col] = val
-        querytpl = 'select %s from %s where %s %s' % (cols, table,
-                                                      ' '.join(conds), at_end)
-        return self.safe_query(querytpl, fdata)
+        return '%s %s=%%(%s)s' % (cond, col, col_name)
 
     def query(self, query):
         """
         Runs a query in unsafe way
         """
-        cur = self.db.cursor()
         try:
-            cur.execute(query)
+            return self._query(query)
         except MySQLdb.OperationalError:
             return None
-        self.should_commit(query)
-        return cur
 
-    def should_commit(self, _query):
-        """
-        determine if the query needs to be committed
-        """
-        query = _query.lower()
-        insert = query.startswith('insert')
-        update = query.startswith('update')
-        delete = query.startswith('delete')
-        if insert or update or delete:
-            self.db.commit()
+    def make_columns(self, data):
+        """make columns for data
 
-    def count_rows(self, query):
+        :data: @todo
+        :returns: @todo
+
         """
-        counts row using given query
-        """
-        res = self.query(query)
-        try:
-            result = res.fetchone()
-            return result[0]
-        except Exception:
-            return None
+        return ', '.join(['%%(%s)s' % key for key in data.keys()])
 
     def append_data(self, data, table, retries=0):
         """
         adds row to database
         """
-        qfields = ', '.join(['%%(%s)s' % key for key in data.keys()])
+        qfields = self.make_columns(data)
         cols = ', '.join(data.keys())
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         return self.execute_query(data, query)
 
     def append_all_data(self, data, table):
+        """adds multiple rows,
+
+        tries in single query first
+        uses multiple queries if fails
         """
-        adds multiple rows
-        """
-        qfields = ', '.join(['%%(%s)s' % key for key in data[0].keys()])
+        qfields = self.make_columns(data[0])
         cols = ', '.join(data[0].keys())
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         state = self.execute_query(data, query, True)
@@ -176,12 +150,12 @@ class MySQL(object):
         :returns: @todo
 
         """
-        logger.debug(query)
         retries = 0
-        cur = self.db.cursor()
+        cur = None
         try:
             while True:
                 try:
+                    cur = self.db.cursor()
                     if many:
                         status = cur.executemany(query, data)
                     else:
@@ -212,43 +186,53 @@ class MySQL(object):
                 cur.close()
 
 
-def main():
-    """
-    do some tests
-    """
-    db = MySQL()
-    try:
-        db.query('create table tests( name varchar(20), si integer)')
-    except MySQLdb.OperationalError:
-        pass
-    try:
+class TestSQLITE(unittest.TestCase):
+    """docstring for TestSQLITE"""
+
+    def test_inserts(self):
+        """test insert queries
+        :returns: @todo
+
+        """
+        global db
         db.append_data({'name': 'gmail.com', 'si': 10}, 'tests')
         db.append_data({'name': 'inbox.com', 'si': 12}, 'tests')
         db.append_data({'name': 'reddit.com', 'si': 1}, 'tests')
         db.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
         db.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
         db.query('insert into tests (name, si) values("google.com", 10)')
+
+    def test_queries(self):
+        """test select queries
+        :returns: @todo
+
+        """
+        global db
         result = db.select('tests', ['name||sgmail.com'])
-        print(result.fetchall())
+        self.assertEqual(0, len(result.fetchall()))
         result = db.select('tests', ['name||gmail.com'])
-        print(result.fetchall())
+        self.assertEqual(1, len(result.fetchall()))
         result = db.select('tests', ['si||2', 'si|or|12'])
-        print(result.fetchall())
+        self.assertEqual(3, len(result.fetchall()))
         result = db.select('tests', ['name||gmail.com', 'name|or|inbox.com'])
-        print(result.fetchall())
+        self.assertEqual(2, len(result.fetchall()))
         result = db.select('tests', ['name||reddit.com'], 'count(*)')
-        print(result.fetchall())
+        self.assertEqual(3, result.fetchone()[0])
         result = db.select('tests', at_end='order by si')
-        print(result.fetchall())
         result = db.select('tests', ['name||reddit.com'], 'count(*)',
                            at_end='group by si')
-        print(result.fetchall())
-        print ("DONE")
-    except Exception:
-        logger.exception("Failed with error")
+
+
+def main():
+    """
+    do some tests
+    """
+    try:
+        db.query('drop table if exists tests')
+        db.query('create table tests(name varchar(20), si integer)')
+    except MySQLdb.OperationalError:
         pass
-    finally:
-        db.query('drop table tests')
+    unittest.main()
 
 
 if __name__ == '__main__':
@@ -256,4 +240,5 @@ if __name__ == '__main__':
     base_logger = setup_logger()
     l = '{}.mysql'.format(CFG.g('logger.base'))
     logger = logging.getLogger(l)
+    db = MySQL()
     main()

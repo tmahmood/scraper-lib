@@ -2,7 +2,10 @@ from datetime import datetime
 import codecs
 import logging
 import logging.handlers
-import libs.config as config
+try:
+    import libs.config as config
+except ImportError:
+    import config
 import re
 import json
 
@@ -26,7 +29,7 @@ def read_file(filename, linewise=False):
                 content = content.split("\n")
         return content
     except Exception as e:
-        print (filename)
+        print(filename)
         raise e
 
 
