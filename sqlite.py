@@ -7,6 +7,7 @@ except ImportError:
     from dbbase import DBBase
 import logging
 import unittest
+import time
 
 g_config = Config()
 l = '{}.sqlite'.format(g_config.g('logger.base'))
@@ -22,7 +23,7 @@ def dict_factory(cursor, row):
 
 class SQLite(DBBase):
     """ stores data in a sqlite table """
-    def __init__(self, dbname=None):
+    def __init__(self, dbname=None, lazy_commit=False):
         super(SQLite, self).__init__()
         self.dbname = dbname if dbname != None else g_config.g('db.sqlite.file')
         self.timeout = g_config.g('db.sqlite.timeout')
@@ -32,6 +33,19 @@ class SQLite(DBBase):
         else:
             self.same_thread = True
         self.connect()
+        self.set_lazy_commit(lazy_commit)
+
+    def set_lazy_commit(self, val):
+        """enables lazy_commit
+        :returns: @todo
+
+        """
+        self.lazy_commit = val
+        if self.lazy_commit:
+            self.commit_func = self.should_commit_lazy
+            self.query_queued = 0
+        else:
+            self.commit_func = self.should_commit
 
     def connect(self):
         self.db = sqlite.connect(self.dbname, self.timeout,
@@ -117,12 +131,13 @@ class SQLite(DBBase):
         """
         retries = 0
         cur = None
+        self.lastid = None
         try:
             while True:
                 try:
                     cur = self.db.cursor()
                     status = cur.execute(query, data)
-                    self.should_commit(query)
+                    self.commit_func(query)
                     try:
                         self.lastid = cur.insert_id()
                     except Exception as e:
@@ -141,7 +156,6 @@ class SQLite(DBBase):
                         if retries < 5:
                             continue
                     logger.exception('failed inserting data')
-                    logger.error("%s, %s", table, data)
                     self.lastid = None
                     raise e
         finally:
@@ -150,7 +164,26 @@ class SQLite(DBBase):
 
     def append_all_data(self, data, table):
         for d in data:
-            self.append_data(d, table, commit=False)
+            self.append_data(d, table)
+        self.db.commit()
+
+    def should_commit_lazy(self, query):
+        """override for should_commit
+
+        :query: @todo
+        :returns: @todo
+
+        """
+        self.query_queued += 1
+        if self.query_queued >= 20:
+            self.should_commit(query)
+            self.query_queued = 0
+
+    def force_commit(self):
+        """forces to commit
+        :returns: @todo
+
+        """
         self.db.commit()
 
 
@@ -163,7 +196,6 @@ class TestSQLITE(unittest.TestCase):
 
         """
         global db
-        db.query('create table tests( name test, si integer)')
         db.append_data({'name': 'gmail.com', 'si': 10}, 'tests')
         db.append_data({'name': 'inbox.com', 'si': 12}, 'tests')
         db.append_data({'name': 'reddit.com', 'si': 1}, 'tests')
@@ -191,6 +223,33 @@ class TestSQLITE(unittest.TestCase):
         result = db.select('tests', ['name||reddit.com'], 'count(*)',
                            at_end='group by si')
 
+    def test_non_lazy_commit(self):
+        """test with possible unique data
+        :returns: @todo
+
+        """
+        db.set_lazy_commit(False)
+        start_time = time.clock()
+        for k in range(0, 1000):
+            db.append_data({'name': 'email_%s.com' % k, 'si': k}, 'uniquetests')
+        print(time.clock() - start_time)
+        cnt = db.count_rows('select count(*) rows from uniquetests')
+        self.assertEqual(1000, cnt)
+        db.query('delete from uniquetests')
+        db.db.commit()
+
+    def test_lazy_commit(self):
+        """test lazy commit
+
+        """
+        db.set_lazy_commit(True)
+        start_time = time.clock()
+        for k in range(0, 1000):
+            db.append_data({'name': 'email_%s.com' % k, 'si': k}, 'uniquetests')
+        print(time.clock() - start_time)
+        cnt = db.count_rows('select count(*) rows from uniquetests')
+        self.assertEqual(1000, cnt)
+
 
 def main():
     try:
@@ -203,4 +262,8 @@ if __name__ == '__main__':
     if os.path.exists('db'):
         os.unlink('db')
     db = SQLite()
+    db.query('create table tests( name test, si integer)')
+    db.query('create table uniquetests(name test unique, si integer)')
     main()
+    if os.path.exists('db'):
+        os.unlink('db')

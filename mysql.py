@@ -74,6 +74,7 @@ class MySQL(DBBase):
         :returns: @todo
 
         """
+        retries = 0
         while True:
             try:
                 return self.do_query(qtpl, data)
