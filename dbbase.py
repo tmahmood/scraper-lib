@@ -27,6 +27,36 @@ class DBBase(object):
         self.should_commit(qtpl)
         return cur
 
+    def make_condition(self, cond, col, col_name):
+        """method signature
+
+        :cond: @todo
+        :col: @todo
+        :col_name: @todo
+        :returns: @todo
+
+        """
+        raise NotImplementedError()
+
+    def safe_query(self, querytpl, data):
+        """method signature
+
+        :querytpl: @todo
+        :data: @todo
+        :returns: @todo
+
+        """
+        raise NotImplementedError()
+
+    def query(self, query):
+        """method signature
+
+        :querytpl: @todo
+        :returns: @todo
+
+        """
+        raise NotImplementedError()
+
     def select(self, table, data=[], cols='*', at_end=''):
         """Executes simple select query
 
@@ -43,7 +73,13 @@ class DBBase(object):
         conds = []
         fdata = {}
         for k, item in enumerate(data):
-            col, cond, val = item.split('|', 3)
+            try:
+                col, cond, val = item.split('|', 3)
+            except ValueError:
+                breaks = item.split('|')
+                col = breaks[0]
+                cond = breaks[1]
+                val = '|'.join(breaks[2:])
             col_name = '%s_%s' % (col, k)
             fdata[col_name] = val
             conds.append(self.make_condition(cond, col, col_name))
