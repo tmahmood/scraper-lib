@@ -166,6 +166,7 @@ class SQLite(DBBase):
         for d in data:
             self.append_data(d, table)
         self.db.commit()
+        self.query_queued = 0
 
     def should_commit_lazy(self, query):
         """override for should_commit
@@ -175,7 +176,7 @@ class SQLite(DBBase):
 
         """
         self.query_queued += 1
-        if self.query_queued >= 20:
+        if self.query_queued >= 30:
             self.should_commit(query)
             self.query_queued = 0
 
@@ -184,6 +185,7 @@ class SQLite(DBBase):
         :returns: @todo
 
         """
+        self.query_queued = 0
         self.db.commit()
 
 

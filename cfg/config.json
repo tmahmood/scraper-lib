@@ -7,13 +7,13 @@
 		"level": "DEBUG",
 		"console": { "level": "INFO" },
 		"file": { "level": "DEBUG" },
-		"backupsize": 33554432
+		"backupsize": 100000000
 	},
 	"db": {
 		"sqlite": {
 			"file": "database_file_name",
 			"timeout": 10,
-			"same_thread": 0
+			"same_thread": 1
 		}
 	}
 }
