@@ -86,8 +86,8 @@ class PGSql(DBBase):
         return '%s %s=%%(%s)s' % (cond, col, col_name)
 
     def query(self, query):
-        """
-        Runs a query in unsafe way
+        """Runs a query in unsafe way
+
         """
         try:
             return self._query(query)
@@ -97,15 +97,18 @@ class PGSql(DBBase):
     def make_columns(self, data):
         """make columns for data
 
-        :data: @todo
+        :data: dictonary containing column name (key) and value (not used)
         :returns: @todo
 
         """
         return ', '.join(['%%(%s)s' % key for key in data.keys()])
 
     def append_data(self, data, table, pk='id'):
-        """
-        adds row to database
+        """adds row to database
+
+        :data: data to be saved
+        :table: name of the table
+        :pk: NEED to provide correct pk (primary key) column, to get last insert id
         """
         qfields = self.make_columns(data)
         cols = ', '.join(data.keys())
@@ -135,10 +138,10 @@ class PGSql(DBBase):
     def execute_query(self, data, query, many=False, table=None):
         """execute query
 
-        :data: @todo
-        :table: @todo
-        :many: @todo
-        :returns: @todo
+        :data: data to be saved
+        :table: name of the table
+        :many: multiple rows to be inserted or not
+        :returns: True or None
 
         """
         retries = 0
@@ -169,6 +172,7 @@ class PGSql(DBBase):
         finally:
             if cur:
                 cur.close()
+        return None
 
 
 class TestSQLITE(unittest.TestCase):
@@ -206,6 +210,8 @@ class TestSQLITE(unittest.TestCase):
         result = db.select('tests', at_end='order by si')
         result = db.select('tests', ['name||reddit.com'], 'count(*)',
                            at_end='group by si')
+
+
 
 
 def main():
