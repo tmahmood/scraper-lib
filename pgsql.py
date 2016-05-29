@@ -9,11 +9,6 @@ import logging
 import unittest
 
 
-CFG = Config()
-l = '{}.pgsql'.format(CFG.g('logger.base'))
-logger = logging.getLogger(l)
-
-
 class PGSql(DBBase):
     """ stores data in a PGSql table """
     def __init__(self, config=None):
@@ -158,6 +153,8 @@ class PGSql(DBBase):
                     self.db.commit()
                     return True
                 except Exception as err:
+                    # TODO: Better error handling
+                    # TODO: Duplicate error handle
                     logger.exception(err)
                     logger.info('reconnecting ... ')
                     self.connect()
@@ -173,6 +170,8 @@ class PGSql(DBBase):
             if cur:
                 cur.close()
         return None
+
+# NOTE: should not depend on ordering of tests
 
 
 class TestSQLITE(unittest.TestCase):
@@ -196,6 +195,7 @@ class TestSQLITE(unittest.TestCase):
         :returns: @todo
 
         """
+        # TODO: test for duplicate entries
         global db
         result = db.select('tests', ['name||sgmail.com'])
         self.assertEqual(0, len(result.fetchall()))
@@ -212,8 +212,6 @@ class TestSQLITE(unittest.TestCase):
                            at_end='group by si')
 
 
-
-
 def main():
     """
     do some tests
@@ -227,6 +225,7 @@ def main():
     unittest.main()
 
 
+CFG = Config()
 if __name__ == '__main__':
     from utils import setup_logger
     base_logger = setup_logger()
@@ -234,3 +233,6 @@ if __name__ == '__main__':
     logger = logging.getLogger(l)
     db = PGSql()
     main()
+else:
+    l = '{}.pgsql'.format(CFG.g('logger.base'))
+    logger = logging.getLogger(l)
