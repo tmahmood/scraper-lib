@@ -2,6 +2,7 @@ try:
     from libs.config import Config
     from libs.dbbase import DBBase
 except ImportError:
+    # pylint: disable=relative-import
     from config import Config
     from dbbase import DBBase
 import MySQLdb
@@ -9,30 +10,46 @@ import logging
 import unittest
 
 
-CFG = Config()
-l = '{}.mysql'.format(CFG.g('logger.base'))
-logger = logging.getLogger(l)
+def make_columns(data):
+    """make columns for data
+
+    :data: @todo
+    :returns: @todo
+
+    """
+    return ', '.join(['%%(%s)s' % key for key in data.keys()])
 
 
 def dict_factory(cursor, row):
-    d = {}
+    """
+    dict factory for mysql row
+    """
+    dest = {}
     for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
+        dest[col[0]] = row[idx]
+    return dest
 
 
 class MySQL(DBBase):
+    """
+    MySQL driver
+    """
+
+    logger = None
+
     """ stores data in a MySQL table """
     def __init__(self, config=None):
         super(MySQL, self).__init__()
         if config == None:
             config = CFG
         self.prep_char = '?'
+        self.dbc = None
         self.lastid = None
         self.dbhost = config.g('db.mysql.host')
         self.user = config.g('db.mysql.user')
         self.pswd = config.g('db.mysql.pass')
         self.dbname = config.g('db.mysql.database')
+        MySQL.logger = logging.getLogger('{}.mysql'.format(CFG.g('logger.base')))
         self.connect()
 
     def connect(self):
@@ -40,14 +57,14 @@ class MySQL(DBBase):
         connects to database
         """
         try:
-            self.db.close()
+            self.dbc.close()
         except AttributeError:
             pass
-        self.db = MySQLdb.connect(self.dbhost, self.user,
-                                  self.pswd, self.dbname, charset='utf8',
-                                  use_unicode=True)
-        self.db.set_character_set('utf8')
-        dbc = self.db.cursor()
+        self.dbc = MySQLdb.connect(self.dbhost, self.user,
+                                   self.pswd, self.dbname, charset='utf8',
+                                   use_unicode=True)
+        self.dbc.set_character_set('utf8')
+        dbc = self.dbc.cursor()
         dbc.execute('SET NAMES utf8;')
         dbc.execute('SET CHARACTER SET utf8;')
         dbc.execute('SET character_set_connection=utf8;')
@@ -55,9 +72,9 @@ class MySQL(DBBase):
     def close(self):
         """
         closes the database, don't use it,
-        close database directly by self.db.close()
+        close database directly by self.dbc.close()
         """
-        self.db.close()
+        self.dbc.close()
 
     def clear_database(self, table):
         """
@@ -84,7 +101,7 @@ class MySQL(DBBase):
                 self.connect()
                 retries += 1
                 if retries > 5:
-                    logger.exception('Failed to execute query')
+                    MySQL.logger.exception('Failed to execute query')
                     return None
 
     def make_condition(self, cond, col, col_name):
@@ -107,20 +124,11 @@ class MySQL(DBBase):
         except MySQLdb.OperationalError:
             return None
 
-    def make_columns(self, data):
-        """make columns for data
-
-        :data: @todo
-        :returns: @todo
-
-        """
-        return ', '.join(['%%(%s)s' % key for key in data.keys()])
-
-    def append_data(self, data, table, retries=0):
+    def append_data(self, data, table, pk=None):
         """
         adds row to database
         """
-        qfields = self.make_columns(data)
+        qfields = make_columns(data)
         cols = ', '.join(data.keys())
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         return self.execute_query(data, query)
@@ -131,7 +139,7 @@ class MySQL(DBBase):
         tries in single query first
         uses multiple queries if fails
         """
-        qfields = self.make_columns(data[0])
+        qfields = make_columns(data[0])
         cols = ', '.join(data[0].keys())
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         state = self.execute_query(data, query, True)
@@ -151,35 +159,39 @@ class MySQL(DBBase):
         :returns: @todo
 
         """
+        # pylint: disable=broad-except, no-member
         retries = 0
         cur = None
         try:
             while True:
                 try:
-                    cur = self.db.cursor()
+                    cur = self.dbc.cursor()
                     if many:
                         status = cur.executemany(query, data)
                     else:
                         status = cur.execute(query, data)
                     try:
                         self.lastid = cur.insert_id()
+                    except AttributeError:
+                        self.lastid = cur.lastrowid
                     except Exception:
                         self.lastid = cur.lastrowid
-                    self.db.commit()
+                        MySQL.logger.exception("ignorable")
+                    self.dbc.commit()
                     return status
                 except MySQLdb.MySQLError as err:
                     if err[0] == 1062:
                         return -2
-                    logger.exception(err)
-                    logger.info('reconnecting ... ')
+                    MySQL.logger.exception(err)
+                    MySQL.logger.info('reconnecting ... ')
                     self.connect()
                     retries += 1
                     if retries > 5:
-                        logger.exception('Failed to execute query')
+                        MySQL.logger.exception('Failed to execute query')
                         return None
                     continue
                 except Exception as exp:
-                    logger.exception('failed inserting data')
+                    MySQL.logger.exception('failed inserting data')
                     self.lastid = None
                     raise exp
         finally:
@@ -187,41 +199,40 @@ class MySQL(DBBase):
                 cur.close()
 
 
-class TestSQLITE(unittest.TestCase):
-    """docstring for TestSQLITE"""
+class TestMySQL(unittest.TestCase):
+    """docstring for TestMySQL"""
 
     def test_inserts(self):
         """test insert queries
         :returns: @todo
 
         """
-        global db
-        db.append_data({'name': 'gmail.com', 'si': 10}, 'tests')
-        db.append_data({'name': 'inbox.com', 'si': 12}, 'tests')
-        db.append_data({'name': 'reddit.com', 'si': 1}, 'tests')
-        db.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
-        db.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
-        db.query('insert into tests (name, si) values("google.com", 10)')
+        dbc.append_data({'name': 'gmail.com', 'si': 10}, 'tests')
+        dbc.append_data({'name': 'inbox.com', 'si': 12}, 'tests')
+        dbc.append_data({'name': 'reddit.com', 'si': 1}, 'tests')
+        dbc.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
+        dbc.append_data({'name': 'reddit.com', 'si': 2}, 'tests')
+        dbc.query('insert into tests (name, si) values("google.com", 10)')
+        self.assertEqual(1, 1)
 
     def test_queries(self):
         """test select queries
         :returns: @todo
 
         """
-        global db
-        result = db.select('tests', ['name||sgmail.com'])
+        result = dbc.select('tests', ['name||sgmail.com'])
         self.assertEqual(0, len(result.fetchall()))
-        result = db.select('tests', ['name||gmail.com'])
+        result = dbc.select('tests', ['name||gmail.com'])
         self.assertEqual(1, len(result.fetchall()))
-        result = db.select('tests', ['si||2', 'si|or|12'])
+        result = dbc.select('tests', ['si||2', 'si|or|12'])
         self.assertEqual(3, len(result.fetchall()))
-        result = db.select('tests', ['name||gmail.com', 'name|or|inbox.com'])
+        result = dbc.select('tests', ['name||gmail.com', 'name|or|inbox.com'])
         self.assertEqual(2, len(result.fetchall()))
-        result = db.select('tests', ['name||reddit.com'], 'count(*)')
+        result = dbc.select('tests', ['name||reddit.com'], 'count(*)')
         self.assertEqual(3, result.fetchone()[0])
-        result = db.select('tests', at_end='order by si')
-        result = db.select('tests', ['name||reddit.com'], 'count(*)',
-                           at_end='group by si')
+        result = dbc.select('tests', at_end='order by si')
+        result = dbc.select('tests', ['name||reddit.com'], 'count(*)',
+                            at_end='group by si')
 
 
 def main():
@@ -229,17 +240,15 @@ def main():
     do some tests
     """
     try:
-        db.query('drop table if exists tests')
-        db.query('create table tests(name varchar(20), si integer)')
+        dbc.query('drop table if exists tests')
+        dbc.query('create table tests(name varchar(20), si integer)')
+    # pylint: disable=no-member
     except MySQLdb.OperationalError:
         pass
     unittest.main()
 
 
+CFG = Config()
 if __name__ == '__main__':
-    from utils import setup_logger
-    base_logger = setup_logger()
-    l = '{}.mysql'.format(CFG.g('logger.base'))
-    logger = logging.getLogger(l)
-    db = MySQL()
+    dbc = MySQL()
     main()

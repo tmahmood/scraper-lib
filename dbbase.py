@@ -1,4 +1,3 @@
-
 class DBBase(object):
 
     """base database object"""
@@ -12,7 +11,7 @@ class DBBase(object):
         update = query.startswith('update')
         delete = query.startswith('delete')
         if insert or update or delete:
-            self.db.commit()
+            self.dbc.commit()
 
     def do_query(self, qtpl, data):
         """execute query
@@ -22,7 +21,7 @@ class DBBase(object):
         :returns: @todo
 
         """
-        cur = self.db.cursor()
+        cur = self.dbc.cursor()
         cur.execute(qtpl, data)
         self.should_commit(qtpl)
         return cur
@@ -57,7 +56,7 @@ class DBBase(object):
         """
         raise NotImplementedError()
 
-    def select(self, table, data=[], cols='*', at_end=''):
+    def select(self, table, data=None, cols='*', at_end=''):
         """Executes simple select query
 
         :table: name of the table
@@ -67,7 +66,7 @@ class DBBase(object):
         :returns: cursor
 
         """
-        if len(data) == 0:
+        if data == None:
             querytpl = 'select %s from %s %s' % (cols, table, at_end)
             return self.safe_query(querytpl, data)
         conds = []
@@ -94,7 +93,7 @@ class DBBase(object):
         :returns: @todo
 
         """
-        cur = self.db.cursor()
+        cur = self.dbc.cursor()
         cur.execute(query)
         self.should_commit(query)
         return cur
