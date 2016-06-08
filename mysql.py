@@ -124,7 +124,7 @@ class MySQL(DBBase):
         except MySQLdb.OperationalError:
             return None
 
-    def append_data(self, data, table, pk=None):
+    def append_data(self, data, table, pkey=None):
         """
         adds row to database
         """
