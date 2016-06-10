@@ -1,6 +1,23 @@
-class DBBase(object):
+"""
+base database stuffs
+"""
+import logging
+from config import Config
 
+G_CFG = Config()
+
+
+class DBBase(object):
     """base database object"""
+
+    logger = logging.getLogger('{}.dbbase'.format(G_CFG.g('logger.base')))
+
+    def __init__(self):
+        """
+        initiate common requirements
+
+        """
+        self.dbc = None
 
     def should_commit(self, _query):
         """
@@ -102,9 +119,6 @@ class DBBase(object):
         """
         counts row using given query
         """
-        try:
-            res = self.query(query)
-            result = res.fetchone()
-            return result[0]
-        except Exception:
-            return None
+        res = self.query(query)
+        result = res.fetchone()
+        return result[0]
