@@ -8,7 +8,6 @@ import os
 import requests
 import time
 import libs.utils as utils
-import random
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 SLEEP_AFTER = 10
@@ -31,7 +30,6 @@ class BaseDownloader(object):
         self.opener = None
         self.testing = False
         self.headers = {'USER_AGENT': USER_AGENT}
-        self._use_proxies = g_config.g('proxies', default='no') == 'yes'
 
     def check_return(self, err):
         if self.testing:
@@ -39,31 +37,25 @@ class BaseDownloader(object):
         else:
             raise err
 
-    def get_proxy(self, url):
-        """load proxies from file
-
-        """
-        raw_proxies = utils.read_file('proxies.txt', True)
-        proxies = {}
-        proxy = random.choice(raw_proxies)
-        proxies['http'] = proxy
-        return proxies
-
     def download(self, url, post=None):
         error_count = 0
-        proxies = None
         while True:
             try:
-                if self._use_proxies:
-                    proxies = self.get_proxy(url)
-                    logger.info("using proxy: %s", proxies)
-                self._get_content(url, post, proxies)
+                with requests.Session() as s:
+                    s.headers.update(self.headers)
+                    if post != None:
+                        response = s.post(url, post)
+                    else:
+                        response = s.get(url)
+                    self.status_code = response.status_code
+                    self.url = response.url
+                    content = response.text
+                    content_non_unicode = response.content
                 break
             except requests.ConnectionError as err:
                 url = url.replace(' ', '%20').lower()
                 url = url.replace('<br%20>', '')
                 url = url.replace('<br%20/>', '')
-                logger.info("Download error")
                 if 'code' in err:
                     self.status_code = err.code
                     logger.info('received code: %s', error)
@@ -80,28 +72,14 @@ class BaseDownloader(object):
             except Exception as err:
                 logger.exception('failed to download: %s', url)
                 return self.check_return(err)
+        self.content = content
+        self.content_non_unicode = content_non_unicode
+        self.last_url = response.url
+        self.downloads = self.downloads + 1
+        self.take_a_nap_after(SLEEP_AFTER, SLEEP)
         return True
 
-    def _get_content(self, url, post=None, proxies=None):
-        """ downloads and set content
-        :returns: @todo
-
-        """
-        with requests.Session() as s:
-            s.headers.update(self.headers)
-            if post != None:
-                response = s.post(url, post, proxies=proxies)
-            else:
-                response = s.get(url, proxies=proxies)
-            self.status_code = response.status_code
-            self.url = response.url
-            self.content = response.text
-            self.content_non_unicode = response.content
-            self.last_url = response.url
-            self.downloads = self.downloads + 1
-            self._take_a_nap_after(SLEEP_AFTER, SLEEP)
-
-    def _take_a_nap_after(self, after, duration):
+    def take_a_nap_after(self, after, duration):
         if self.downloads % after == 0:
             time.sleep(duration)
 
