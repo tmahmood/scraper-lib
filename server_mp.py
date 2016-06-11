@@ -1,10 +1,9 @@
 import socket
 from inc.client import Client
 from libs import utils
-from libs.mysql import MySQL
+from libs.pgsql import PGSql
 
 logger = utils.setup_logger()
-
 
 class Server(object):
     """docstring for ServerMultiProcess"""
@@ -12,7 +11,7 @@ class Server(object):
         super(Server, self).__init__()
         self.host = host
         self.port = int(port)
-        self.db = MySQL()
+        self.db = PGSql()
         self.db.query('update scrapers set stage = 0')
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((self.host, self.port))
@@ -44,6 +43,6 @@ class Server(object):
             logger.exception("server out ...")
         finally:
             logger.info('cleaning up')
-            utils.delete_folder_content('cache/queries')
+            # set running scrapers to be paused
+            self.db.query('update scrapers set stage = 3 where stage = 1')
             self.socket.close()
-            self.db.query('update scrapers set stage = 0')

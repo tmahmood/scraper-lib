@@ -37,7 +37,6 @@ class PGSql(DBBase):
         self.pswd = config.g('db.pgsql.pass')
         self.dbname = config.g('db.pgsql.database')
         PGSql.logger = logging.getLogger('{}.pgsql'.format(CFG.g('logger.base')))
-        self.connect()
 
     def connect(self):
         """
@@ -47,15 +46,16 @@ class PGSql(DBBase):
             self.dbc.close()
         except AttributeError:
             pass
-        self.dbc = psycopg2.connect(host=self.dbhost, user=self.user,
-                                    password=self.pswd, dbname=self.dbname)
+        return psycopg2.connect(host=self.dbhost, user=self.user,
+                                password=self.pswd, dbname=self.dbname)
 
+    # pylint: disable=no-self-use
     def close(self):
         """
         closes the database, don't use it,
         close database directly by self.dbc.close()
         """
-        self.dbc.close()
+        raise Exception("You should not use it for postgres")
 
     def clear_database(self, table):
         """
@@ -72,18 +72,14 @@ class PGSql(DBBase):
         :returns: @todo
 
         """
-        retries = 0
-        while True:
+        with self.connect() as conn:
             try:
-                return self.do_query(qtpl, data)
+                return self.do_query(qtpl, data, conn=conn)
             except psycopg2.IntegrityError:
                 return -2
             except psycopg2.Error:
-                self.connect()
-                retries += 1
-                if retries > 5:
-                    PGSql.logger.exception('Failed to execute query')
-                    return None
+                PGSql.logger.exception('Failed to execute query')
+        return None
 
     def make_condition(self, cond, col, col_name):
         """builds appropiate query
@@ -100,10 +96,11 @@ class PGSql(DBBase):
         """Runs a query in unsafe way
 
         """
-        try:
-            return self._query(query)
-        except psycopg2.Error:
-            return None
+        with self.connect() as conn:
+            try:
+                return self._query(query, conn=conn)
+            except psycopg2.Error:
+                return None
 
     def append_data(self, data, table, pkey='id'):
         """adds row to database
@@ -116,9 +113,7 @@ class PGSql(DBBase):
         cols = ', '.join(data.keys())
         query = "INSERT INTO %s (%s) VALUES (%s) RETURNING %s"\
                 % (table, cols, qfields, pkey)
-        status = self.execute_query(data, query)
-        if status == None:
-            return None
+        return self.execute_query(data, query)
 
     def append_all_data(self, data, table):
         """adds multiple rows,
@@ -131,11 +126,13 @@ class PGSql(DBBase):
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         state = self.execute_query(data, query, True)
         if state == -2:
+            cnt = 0
             for row in data:
-                self.append_data(row, table)
+                if self.append_data(row, table):
+                    cnt += 1
+            return cnt
         else:
             return state
-        return True
 
     def execute_query(self, data, query, many=False):
         """execute query
@@ -146,33 +143,21 @@ class PGSql(DBBase):
         :returns: True or None
 
         """
-        retries = 0
-        cur = None
-        try:
-            while True:
-                try:
-                    cur = self.dbc.cursor()
-                    if many:
-                        cur.executemany(query, data)
-                    else:
-                        cur.execute(query, data)
-                        self.lastid = cur.fetchone()[0]
-                    self.dbc.commit()
-                    return True
-                except psycopg2.IntegrityError:
-                    return -2
-                except psycopg2.Error as err:
-                    PGSql.logger.exception(err)
-                    PGSql.logger.info('reconnecting ... ')
-                    self.connect()
-                    retries += 1
-                    if retries > 5:
-                        PGSql.logger.exception('Failed to execute query')
-                        return None
-                    continue
-        finally:
-            if cur:
-                cur.close()
+        with self.connect() as conn:
+            cur = None
+            try:
+                cur = conn.cursor()
+                if many:
+                    cur.executemany(query, data)
+                else:
+                    cur.execute(query, data)
+                    self.lastid = cur.fetchone()[0]
+                return True
+            except psycopg2.IntegrityError:
+                PGSql.logger.debug("duplicate %s", query)
+                return -2
+            except psycopg2.Error:
+                PGSql.logger.exception("%s %s", query, data)
         return None
 
 

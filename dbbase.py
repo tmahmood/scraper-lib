@@ -19,7 +19,7 @@ class DBBase(object):
         """
         self.dbc = None
 
-    def should_commit(self, _query):
+    def should_commit(self, _query, conn=None):
         """
         determine if the query needs to be committed
         """
@@ -28,9 +28,12 @@ class DBBase(object):
         update = query.startswith('update')
         delete = query.startswith('delete')
         if insert or update or delete:
-            self.dbc.commit()
+            if conn != None:
+                conn.commit()
+            else:
+                self.dbc.commit()
 
-    def do_query(self, qtpl, data):
+    def do_query(self, qtpl, data, conn=None):
         """execute query
 
         :qtpl: @todo
@@ -38,9 +41,12 @@ class DBBase(object):
         :returns: @todo
 
         """
-        cur = self.dbc.cursor()
+        if conn != None:
+            cur = conn.cursor()
+        else:
+            cur = self.dbc.cursor()
         cur.execute(qtpl, data)
-        self.should_commit(qtpl)
+        self.should_commit(qtpl, conn=conn)
         return cur
 
     def make_condition(self, cond, col, col_name):
@@ -54,7 +60,7 @@ class DBBase(object):
         """
         raise NotImplementedError()
 
-    def safe_query(self, querytpl, data):
+    def safe_query(self, querytpl, data, conn=None):
         """method signature
 
         :querytpl: @todo
@@ -103,16 +109,19 @@ class DBBase(object):
                                                       ' '.join(conds), at_end)
         return self.safe_query(querytpl, fdata)
 
-    def _query(self, query):
+    def _query(self, query, conn=None):
         """runs query
 
         :query: @todo
         :returns: @todo
 
         """
-        cur = self.dbc.cursor()
+        if conn != None:
+            cur = conn.cursor()
+        else:
+            cur = self.dbc.cursor()
         cur.execute(query)
-        self.should_commit(query)
+        self.should_commit(query, conn=conn)
         return cur
 
     def count_rows(self, query):
