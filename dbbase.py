@@ -23,7 +23,7 @@ class DBBase(object):
         """check if query is either insert/update/delete/truncate
 
         """
-        query = _query.lower()
+        query = _query.lower().strip()
         insert = query.startswith('insert')
         update = query.startswith('update')
         delete = query.startswith('delete')

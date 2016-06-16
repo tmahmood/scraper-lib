@@ -61,6 +61,7 @@ class PGSql(DBBase):
         clears given table
         """
         self.query("delete from %s" % table)
+        self.dbc.commit()
 
     def make_condition(self, cond, col, col_name):
         """builds appropiate query
@@ -83,26 +84,13 @@ class PGSql(DBBase):
 
     def query(self, query):
         """Runs a query in unsafe way
-
         """
         try:
-            return self._query(query)
-        except psycopg2.Error:
-            self.reconnect()
-            return self.query_new_conn(query)
-
-    def query_new_conn(self, query):
-        """query using new connection
-
-        :query: @todo
-        :returns: @todo
-
-        """
-        try:
+            if self.requires_commit(query) is False:
+                return self._query(query)
             with self.connect() as conn:
                 return self._query(query, conn=conn)
         except psycopg2.Error:
-            DBBase.logger.exception("failed: %s", query)
             return None
 
     def safe_query(self, qtpl, data, conn=None):
@@ -115,25 +103,17 @@ class PGSql(DBBase):
 
         """
         try:
-            return self.do_query(qtpl, data)
+            if self.requires_commit(qtpl) is False:
+                return self.do_query(qtpl, data)
+            with self.connect() as conn:
+                return self.do_query(qtpl, data, conn=conn)
         except psycopg2.IntegrityError:
             self.reconnect()
             DBBase.logger.debug("IntegrityError: %s", qtpl)
             return -2
         except psycopg2.Error:
             PGSql.logger.exception('Failed: %s', qtpl)
-            return self._safe_query_new_conn(qtpl, data)
-
-    def _safe_query_new_conn(self, qtpl, data):
-        """query using new connection
-        """
-        try:
-            with self.connect() as conn:
-                return self.do_query(qtpl, data, conn=conn)
-        except psycopg2.Error:
-            PGSql.logger.exception('Failed: %s', qtpl)
-            return self._safe_query_new_conn(qtpl, data)
-        return None
+            return None
 
     def append_data(self, data, table, pkey='id'):
         """adds row to database
