@@ -5,6 +5,7 @@ from libs.pgsql import PGSql
 
 logger = utils.setup_logger()
 
+
 class Server(object):
     """docstring for ServerMultiProcess"""
     def __init__(self, host, port):
@@ -12,7 +13,6 @@ class Server(object):
         self.host = host
         self.port = int(port)
         self.db = PGSql()
-        self.db.query('update scrapers set stage = 0')
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((self.host, self.port))
         self.socket.listen(10)

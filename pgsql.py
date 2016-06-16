@@ -29,7 +29,6 @@ class PGSql(DBBase):
         super(PGSql, self).__init__()
         if config == None:
             config = CFG
-        self.dbc = None
         self.prep_char = '?'
         self.lastid = None
         self.dbhost = config.g('db.pgsql.host')
@@ -37,17 +36,17 @@ class PGSql(DBBase):
         self.pswd = config.g('db.pgsql.pass')
         self.dbname = config.g('db.pgsql.database')
         PGSql.logger = logging.getLogger('{}.pgsql'.format(CFG.g('logger.base')))
+        self.dbc = self.connect()
 
     def connect(self):
         """
         connects to database
         """
         try:
-            self.dbc.close()
+            return psycopg2.connect(host=self.dbhost, user=self.user,
+                                    password=self.pswd, dbname=self.dbname)
         except AttributeError:
             pass
-        return psycopg2.connect(host=self.dbhost, user=self.user,
-                                password=self.pswd, dbname=self.dbname)
 
     # pylint: disable=no-self-use
     def close(self):
@@ -63,24 +62,6 @@ class PGSql(DBBase):
         """
         self.query("delete from %s" % table)
 
-    def safe_query(self, qtpl, data):
-        """Executed binding query
-        ex: select * from table where q=:s, d=:k
-
-        :query: @todo
-        :data: @todo
-        :returns: @todo
-
-        """
-        with self.connect() as conn:
-            try:
-                return self.do_query(qtpl, data, conn=conn)
-            except psycopg2.IntegrityError:
-                return -2
-            except psycopg2.Error:
-                PGSql.logger.exception('Failed to execute query')
-        return None
-
     def make_condition(self, cond, col, col_name):
         """builds appropiate query
 
@@ -92,15 +73,67 @@ class PGSql(DBBase):
         """
         return '%s %s=%%(%s)s' % (cond, col, col_name)
 
+    def reconnect(self):
+        """reconnects persistant connection
+        :returns: @todo
+
+        """
+        self.dbc.close()
+        self.dbc = self.connect()
+
     def query(self, query):
         """Runs a query in unsafe way
 
         """
-        with self.connect() as conn:
-            try:
+        try:
+            return self._query(query)
+        except psycopg2.Error:
+            self.reconnect()
+            return self.query_new_conn(query)
+
+    def query_new_conn(self, query):
+        """query using new connection
+
+        :query: @todo
+        :returns: @todo
+
+        """
+        try:
+            with self.connect() as conn:
                 return self._query(query, conn=conn)
-            except psycopg2.Error:
-                return None
+        except psycopg2.Error:
+            DBBase.logger.exception("failed: %s", query)
+            return None
+
+    def safe_query(self, qtpl, data, conn=None):
+        """Executed binding query
+        ex: select * from table where q=:s, d=:k
+
+        :query: @todo
+        :data: @todo
+        :returns: @todo
+
+        """
+        try:
+            return self.do_query(qtpl, data)
+        except psycopg2.IntegrityError:
+            self.reconnect()
+            DBBase.logger.debug("IntegrityError: %s", qtpl)
+            return -2
+        except psycopg2.Error:
+            PGSql.logger.exception('Failed: %s', qtpl)
+            return self._safe_query_new_conn(qtpl, data)
+
+    def _safe_query_new_conn(self, qtpl, data):
+        """query using new connection
+        """
+        try:
+            with self.connect() as conn:
+                return self.do_query(qtpl, data, conn=conn)
+        except psycopg2.Error:
+            PGSql.logger.exception('Failed: %s', qtpl)
+            return self._safe_query_new_conn(qtpl, data)
+        return None
 
     def append_data(self, data, table, pkey='id'):
         """adds row to database

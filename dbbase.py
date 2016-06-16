@@ -19,15 +19,22 @@ class DBBase(object):
         """
         self.dbc = None
 
-    def should_commit(self, _query, conn=None):
-        """
-        determine if the query needs to be committed
+    def requires_commit(self, _query):
+        """check if query is either insert/update/delete/truncate
+
         """
         query = _query.lower()
         insert = query.startswith('insert')
         update = query.startswith('update')
         delete = query.startswith('delete')
-        if insert or update or delete:
+        truncate = query.startswith('truncate')
+        return insert or update or delete or truncate
+
+    def should_commit(self, _query, conn=None):
+        """
+        determine if the query needs to be committed
+        """
+        if self.requires_commit(_query):
             if conn != None:
                 conn.commit()
             else:
