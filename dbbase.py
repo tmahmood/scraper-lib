@@ -2,10 +2,7 @@
 base database stuffs
 """
 import logging
-try:
-    from config import Config
-except ImportError:
-    from libs.config import Config
+from libs.config import Config
 
 G_CFG = Config()
 

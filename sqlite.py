@@ -2,13 +2,8 @@
 sqlite driver
 """
 import sqlite3 as sqlite
-try:
-    from libs.config import Config
-    from libs.dbbase import DBBase
-except ImportError:
-    # pylint: disable=relative-import
-    from config import Config
-    from dbbase import DBBase
+from libs.config import Config
+from libs.dbbase import DBBase
 import logging
 import unittest
 
