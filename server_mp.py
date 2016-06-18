@@ -1,18 +1,20 @@
+"""
+multiprocessing server
+"""
 import socket
 from inc.client import Client
 from libs import utils
-from libs.pgsql import PGSql
 
-logger = utils.setup_logger()
+LOGGER = utils.setup_logger()
 
 
 class Server(object):
     """docstring for ServerMultiProcess"""
+
     def __init__(self, host, port):
         super(Server, self).__init__()
         self.host = host
         self.port = int(port)
-        self.db = PGSql()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((self.host, self.port))
         self.socket.listen(10)
@@ -22,11 +24,12 @@ class Server(object):
         """everything starts here
 
         """
+        process = None
         try:
             while True:
                 try:
                     conn, address = self.socket.accept()
-                    logger.info("Got connection %s", address)
+                    LOGGER.info("Got connection %s", address)
                     process = Client(conn)
                     process.daemon = True
                     process.start()
@@ -35,14 +38,15 @@ class Server(object):
                         conn.close()
                     break
                 except Exception:
-                    logger.exception("FAILED")
+                    LOGGER.exception("FAILED")
                     if conn:
                         conn.close()
                     break
         except Exception:
-            logger.exception("server out ...")
+            LOGGER.exception("server out ...")
         finally:
-            logger.info('cleaning up')
+            LOGGER.info('cleaning up')
             # set running scrapers to be paused
-            self.db.query('update scrapers set stage = 3 where stage = 1')
+            if process != None:
+                process.cleanup()
             self.socket.close()

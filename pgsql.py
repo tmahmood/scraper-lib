@@ -54,7 +54,7 @@ class PGSql(DBBase):
         closes the database, don't use it,
         close database directly by self.dbc.close()
         """
-        raise Exception("You should not use it for postgres")
+        self.dbc.close()
 
     def clear_database(self, table):
         """
@@ -79,6 +79,7 @@ class PGSql(DBBase):
         :returns: @todo
 
         """
+        PGSql.logger.info("reconnecting")
         self.dbc.close()
         self.dbc = self.connect()
 
@@ -95,7 +96,7 @@ class PGSql(DBBase):
 
     def safe_query(self, qtpl, data, conn=None):
         """Executed binding query
-        ex: select * from table where q=:s, d=:k
+        ex: select * from table where q=%s, d=%s
 
         :query: @todo
         :data: @todo
@@ -108,9 +109,14 @@ class PGSql(DBBase):
             with self.connect() as conn:
                 return self.do_query(qtpl, data, conn=conn)
         except psycopg2.IntegrityError:
-            self.reconnect()
-            DBBase.logger.debug("IntegrityError: %s", qtpl)
+            self._query('rollback')
+            PGSql.logger.debug("IntegrityError: %s", qtpl)
             return -2
+        except (psycopg2.InterfaceError, psycopg2.OperationalError,
+                psycopg2.DatabaseError):
+            PGSql.logger.debug('closed, reconnecting')
+            self.reconnect()
+            self.safe_query(qtpl, data, conn)
         except psycopg2.Error:
             PGSql.logger.exception('Failed: %s', qtpl)
             return None
@@ -171,7 +177,7 @@ class PGSql(DBBase):
                 return -2
             except psycopg2.Error:
                 PGSql.logger.exception("%s %s", query, data)
-        return None
+                return None
 
 
 class TestSQLITE(unittest.TestCase):

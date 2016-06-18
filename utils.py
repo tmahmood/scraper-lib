@@ -2,6 +2,7 @@ from datetime import datetime
 import codecs
 import logging
 import logging.handlers
+import os
 try:
     import libs.config as config
 except ImportError:
@@ -69,6 +70,19 @@ def cleanup_text(text):
     t = re.sub('\xa0', '', t)
     t = re.sub('\u2022', '', t)
     return t
+
+
+def remove_br(content):
+    """removes <br> tag
+
+    :content: @todo
+    :returns: @todo
+
+    """
+    content = content.replace('<br>', '\n')
+    content = content.replace('</br>', '\n')
+    content = content.replace('<br />', '\n')
+    content = content.replace('<br%20/>', '\n')
 
 
 def clean_url(lnk, baseurl):
@@ -183,6 +197,23 @@ def get_timestamp():
     """
     return (datetime.now() - datetime(1970, 1, 1)).total_seconds()
 
+
+def file_cached_path(filename, url=None):
+    """ expects hashed filename """
+    burl = ''
+    if url:
+        burl = url.replace('http://', '')
+        burl = burl.replace('https://', '')
+        burl = burl.replace('www.', '')
+        burl = burl.split('/')[0]
+    segsize = 3
+    cachepath = 'cache'
+    firstpart = filename[0:segsize]
+    secondpart = filename[segsize: 2 * segsize]
+    fullpath = "%s/%s/%s/%s" % (cachepath, burl, firstpart, secondpart)
+    if not os.path.exists(fullpath):
+        os.makedirs(fullpath)
+    return '%s/%s.html' % (fullpath, filename)
 
 class DateTimeEncoder(json.JSONEncoder):
     """ encode datetime to proper string for json
