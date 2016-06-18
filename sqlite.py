@@ -162,9 +162,12 @@ class SQLite(DBBase):
             except AttributeError:
                 self.lastid = cur.lastrowid
             return status
-        except (sqlite.IntegrityError, sqlite.DatabaseError) as sie:
-            SQLite.logger.debug('IntegrityError %s', sie)
+        except sqlite.IntegrityError as sie:
+            SQLite.logger.debug('IntegrityError: %s %s %s', sie, query, data)
             return -2
+        except sqlite.DatabaseError as dbe:
+            SQLite.logger.debug('DatabaseError: %s %s %s', dbe, query, data)
+            return -4
         except sqlite.OperationalError as oie:
             SQLite.logger.debug('OperationalError %s', oie)
             return -3

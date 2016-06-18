@@ -130,7 +130,7 @@ class DomDownloader(BaseDownloader):
         while True:
             try:
                 if self.remove_br:
-                    utils.remove_br(content)
+                    content = utils.remove_br(content)
                 self.dom = html.fromstring(content)
                 break
             except ValueError:

@@ -88,6 +88,7 @@ def remove_br(content):
     content = content.replace('</br>', '\n')
     content = content.replace('<br />', '\n')
     content = content.replace('<br%20/>', '\n')
+    return content
 
 
 def clean_url(lnk, baseurl):
