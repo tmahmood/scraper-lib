@@ -38,9 +38,14 @@ def save_to_file(filename, content, use_codec=False):
     if use_codec:
         with codecs.open(filename, encoding='utf-8', mode='w') as fp:
             try:
-                fp.write(unicode(content))
+                return fp.write(unicode(content))
             except NameError:
-                fp.write(content.encode('utf-8'))
+                pass
+            try:
+                return fp.write(content.encode('utf-8'))
+            except TypeError:
+                pass
+            return fp.write(content)
     else:
         with open(filename, mode='w') as fp:
             fp.write(content)
