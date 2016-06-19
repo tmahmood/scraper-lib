@@ -94,7 +94,7 @@ class PGSql(DBBase):
         except psycopg2.Error:
             return None
 
-    def safe_query(self, qtpl, data, conn=None):
+    def safe_query(self, qtpl, data, conn=None, retries=0):
         """Executed binding query
         ex: select * from table where q=%s, d=%s
 
@@ -116,7 +116,11 @@ class PGSql(DBBase):
                 psycopg2.DatabaseError):
             PGSql.logger.debug('closed, reconnecting')
             self.reconnect()
-            self.safe_query(qtpl, data, conn)
+            retries += 1
+            if retries > 5:
+                PGSql.logger.exception("Failed to execute_query")
+                return None
+            self.safe_query(qtpl, data, conn, retries=retries)
         except psycopg2.Error:
             PGSql.logger.exception('Failed: %s', qtpl)
             return None

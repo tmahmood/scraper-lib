@@ -67,7 +67,7 @@ class DBBase(object):
         """
         raise NotImplementedError()
 
-    def safe_query(self, querytpl, data, conn=None):
+    def safe_query(self, querytpl, data, conn=None, retries=0):
         """method signature
 
         :querytpl: @todo

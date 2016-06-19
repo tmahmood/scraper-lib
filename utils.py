@@ -34,6 +34,19 @@ def read_file(filename, linewise=False):
         raise e
 
 
+def uni(text):
+    """get some unicode love
+
+    :text: @todo
+    :returns: @todo
+
+    """
+    try:
+        return unicode(text)
+    except NameError:
+        return text
+
+
 def save_to_file(filename, content, use_codec=False):
     if use_codec:
         with codecs.open(filename, encoding='utf-8', mode='w') as fp:
