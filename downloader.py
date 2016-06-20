@@ -12,6 +12,10 @@ import requests
 import time
 import libs.utils as utils
 import unittest
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 # pylint: disable=global-statement
 
@@ -78,6 +82,12 @@ class BaseDownloader(Logger):
                     content = response.text
                     content_non_unicode = response.content
                 break
+            except requests.packages.urllib3.exceptions.ReadTimeoutError as err:
+                Logger.log.exception("%s", url)
+                return self.check_return(err)
+            except requests.exceptions.SSLError as err:
+                Logger.log.exception("%s", url)
+                return self.check_return(err)
             except requests.ConnectionError as err:
                 url = url.replace(' ', '%20').lower()
                 url = url.replace('<br%20>', '')

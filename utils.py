@@ -3,10 +3,7 @@ import codecs
 import logging
 import logging.handlers
 import os
-try:
-    import libs.config as config
-except ImportError:
-    import config
+import libs.config as config
 import re
 import json
 
@@ -16,6 +13,8 @@ except ImportError as e:
     from md5 import md5
 
 config = config.Config()
+
+LOGGER = '{}.utils'.format(config.g('logger.base'))
 
 
 def read_file(filename, linewise=False):

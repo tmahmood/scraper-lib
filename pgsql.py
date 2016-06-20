@@ -179,6 +179,9 @@ class PGSql(DBBase):
             except psycopg2.IntegrityError:
                 PGSql.logger.debug("duplicate %s", query)
                 return -2
+            except psycopg2.DataError:
+                PGSql.logger.debug("data error %s", query)
+                return -3
             except psycopg2.Error:
                 PGSql.logger.exception("%s %s", query, data)
                 return None
