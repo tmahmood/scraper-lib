@@ -23,19 +23,20 @@ def make_columns(data):
 class PGSql(DBBase):
     """ stores data in a PGSql table """
 
+    cfg = None
     logger = None
 
-    def __init__(self, config=None):
+    def __init__(self):
         super(PGSql, self).__init__()
-        if config == None:
-            config = CFG
+        PGSql.cfg = Config()
+        txt = '{}.pgsql'.format(PGSql.cfg.g('logger.base'))
+        PGSql.logger = logging.getLogger(txt)
         self.prep_char = '?'
         self.lastid = None
-        self.dbhost = config.g('db.pgsql.host')
-        self.user = config.g('db.pgsql.user')
-        self.pswd = config.g('db.pgsql.pass')
-        self.dbname = config.g('db.pgsql.database')
-        PGSql.logger = logging.getLogger('{}.pgsql'.format(CFG.g('logger.base')))
+        self.dbhost = PGSql.cfg.g('db.pgsql.host')
+        self.user = PGSql.cfg.g('db.pgsql.user')
+        self.pswd = PGSql.cfg.g('db.pgsql.pass')
+        self.dbname = PGSql.cfg.g('db.pgsql.database')
         self.dbc = self.connect()
 
     def connect(self):
@@ -237,7 +238,6 @@ def main():
     unittest.main()
 
 
-CFG = Config()
 if __name__ == '__main__':
     dbc = PGSql()
     main()

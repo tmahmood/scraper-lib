@@ -12,10 +12,6 @@ try:
 except ImportError as e:
     from md5 import md5
 
-config = config.Config()
-
-LOGGER = '{}.utils'.format(config.g('logger.base'))
-
 
 def read_file(filename, linewise=False):
     """
@@ -136,21 +132,22 @@ def hash(url, data=None):
 
 
 def setup_logger():
-    logger = logging.getLogger(config.g('logger.base'))
-    level = getattr(logging, config.g('logger.level'))
-    clevel = getattr(logging, config.g('logger.console.level'))
-    flevel = getattr(logging, config.g('logger.file.level'))
+    cfg = config.Config()
+    logger = logging.getLogger(cfg.g('logger.base'))
+    level = getattr(logging, cfg.g('logger.level'))
+    clevel = getattr(logging, cfg.g('logger.console.level'))
+    flevel = getattr(logging, cfg.g('logger.file.level'))
     logger.setLevel(level)
-    logfilepath = config.g('logger.path')
-    maxsize = config.g('logger.backupsize', default=33554432)
+    logfilepath = cfg.g('logger.path')
+    maxsize = cfg.g('logger.backupsize', default=33554432)
     filehandler = logging.handlers.RotatingFileHandler(logfilepath,
                                               mode='w',
                                               maxBytes=maxsize,
                                               backupCount=2)
     consolehandler = logging.StreamHandler()
-    template = config.get('logger', 'template')
+    template = cfg.get('logger', 'template')
     formatter = logging.Formatter(template)
-    formatter.datefmt = config.g('logger.datefmt')
+    formatter.datefmt = cfg.g('logger.datefmt')
     filehandler.setFormatter(formatter)
     consolehandler.setFormatter(formatter)
     consolehandler.setLevel(clevel)
@@ -208,6 +205,7 @@ def search_line_in_file(filename, text):
         return text in f
     return False
 
+
 def get_timestamp():
     """get current unix timestamp
     :returns: @todo
@@ -232,6 +230,7 @@ def file_cached_path(filename, url=None):
     if not os.path.exists(fullpath):
         os.makedirs(fullpath)
     return '%s/%s.html' % (fullpath, filename)
+
 
 class DateTimeEncoder(json.JSONEncoder):
     """ encode datetime to proper string for json

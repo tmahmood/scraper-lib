@@ -4,13 +4,12 @@ base database stuffs
 import logging
 from libs.config import Config
 
-G_CFG = Config()
-
 
 class DBBase(object):
     """base database object"""
 
-    logger = logging.getLogger('{}.dbbase'.format(G_CFG.g('logger.base')))
+    cfg = None
+    logger = None
 
     def __init__(self):
         """
@@ -18,6 +17,9 @@ class DBBase(object):
 
         """
         self.dbc = None
+        DBBase.cfg = Config()
+        txt = '{}.dbbase'.format(DBBase.cfg.g('logger.base'))
+        DBBase.logger = logging.getLogger(txt)
 
     def requires_commit(self, _query):
         """check if query is either insert/update/delete/truncate

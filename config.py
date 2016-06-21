@@ -3,7 +3,7 @@ import json
 
 class Config(object):
     """manage configurations"""
-    def __init__(self, cfgfile = 'cfg/config.json'):
+    def __init__(self, cfgfile='cfg/config.json'):
         super(Config, self).__init__()
         self.cfgfile = cfgfile
         self.cfg = json.load(open(self.cfgfile))
@@ -17,8 +17,8 @@ class Config(object):
     def g(self, ky, default=False):
         keys = ky.split('.')
         k = self.cfg
-        for kw in keys:
-            if not kw in k:
+        for kwrd in keys:
+            if kwrd not in k:
                 return default
-            k = k[kw]
+            k = k[kwrd]
         return k

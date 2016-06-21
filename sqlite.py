@@ -7,8 +7,6 @@ from libs.dbbase import DBBase
 import logging
 import unittest
 
-G_CFG = Config()
-
 
 def dict_factory(cursor, row):
     """
@@ -34,15 +32,19 @@ def make_columns(data):
 class SQLite(DBBase):
     """ stores data in a sqlite table """
 
-    logger = logging.getLogger('{}.sqlite'.format(G_CFG.g('logger.base')))
+    cfg = None
+    logger = None
 
     def __init__(self, dbname=None, lazy_commit=False):
         super(SQLite, self).__init__()
-        self.dbname = dbname if dbname != None else G_CFG.g('db.sqlite.file')
-        self.timeout = G_CFG.g('db.sqlite.timeout')
+        SQLite.cfg = Config()
+        txt = '{}.sqlite'.format(SQLite.cfg.g('logger.base'))
+        SQLite.logger = logging.getLogger(txt)
+        self.dbname = dbname if dbname != None else SQLite.cfg.g('db.sqlite.file')
+        self.timeout = SQLite.cfg.g('db.sqlite.timeout')
         self.query_queued = 0
         self.lastid = None
-        strd = G_CFG.g('db.sqlite.same_thread', 0)
+        strd = SQLite.cfg.g('db.sqlite.same_thread', 0)
         if strd == 0:
             self.same_thread = False
         else:

@@ -35,21 +35,22 @@ class MySQL(DBBase):
     MySQL driver
     """
 
+    cfg = None
     logger = None
 
     """ stores data in a MySQL table """
-    def __init__(self, config=None):
+    def __init__(self):
         super(MySQL, self).__init__()
-        if config == None:
-            config = CFG
+        MySQL.cfg = Config()
+        txt = '{}.mysql'.format(MySQL.cfg.g('logger.base'))
+        MySQL.logger = logging.getLogger(txt)
         self.prep_char = '?'
         self.dbc = None
         self.lastid = None
-        self.dbhost = config.g('db.mysql.host')
-        self.user = config.g('db.mysql.user')
-        self.pswd = config.g('db.mysql.pass')
-        self.dbname = config.g('db.mysql.database')
-        MySQL.logger = logging.getLogger('{}.mysql'.format(CFG.g('logger.base')))
+        self.dbhost = MySQL.cfg.g('db.mysql.host')
+        self.user = MySQL.cfg.g('db.mysql.user')
+        self.pswd = MySQL.cfg.g('db.mysql.pass')
+        self.dbname = MySQL.cfg.g('db.mysql.database')
         self.connect()
 
     def connect(self):
@@ -248,7 +249,6 @@ def main():
     unittest.main()
 
 
-CFG = Config()
 if __name__ == '__main__':
     dbc = MySQL()
     main()

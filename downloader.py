@@ -12,6 +12,7 @@ import requests
 import time
 import libs.utils as utils
 import unittest
+import random
 try:
     from urllib.parse import urlparse
 except ImportError:
@@ -22,18 +23,32 @@ except ImportError:
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/20.0'
 SLEEP_AFTER = 10
 SLEEP = 3
-G_CFG = config.Config()
+
+
+def cleanup_url(url):
+    """cleans up the given url of weird stuffs
+
+    :url: @todo
+    :returns: @todo
+
+    """
+    url = url.replace(' ', '%20').lower()
+    url = url.replace('<br%20>', '')
+    url = url.replace('<br%20/>', '')
+    return url
 
 
 # pylint: disable=too-few-public-methods
 class Logger(object):
     """logger class"""
 
+    cfg = None
     log = None
 
     def __init__(self):
         super(Logger, self).__init__()
-        txt = '{}.dm'.format(G_CFG.g('logger.base'))
+        Logger.cfg = config.Config()
+        txt = '{}.dm'.format(Logger.cfg.g('logger.base'))
         Logger.log = logging.getLogger(txt)
 
 
@@ -53,7 +68,44 @@ class BaseDownloader(Logger):
         self.opener = None
         self.from_cache = False
         self.testing = False
+        self.current_proxy = None
+        self.proxy_used = 0
+        self.bad_proxies = set()
         self.headers = {'USER_AGENT': USER_AGENT}
+        self.load_bad_proxies()
+
+    def proxy_enabled(self):
+        """check if proxy is enabled
+        :returns: @todo
+
+        """
+        return Logger.cfg.g('proxies', 'no') == 'yes'
+
+    def load_bad_proxies(self):
+        """loads up bad proxies
+        :returns: @todo
+
+        """
+        if self.proxy_enabled():
+            self.current_proxy = self.get_random_proxy()
+        try:
+            self.bad_proxies = set(utils.read_file('bad_proxies', True))
+        except Exception:
+            Logger.log.exception("failed to load file")
+            pass
+
+    def get_random_proxy(self):
+        """returns a proxy from proxies.txt
+        :returns: @todo
+
+        """
+        proxies = utils.read_file('proxies.txt', True)
+        while True:
+            proxy = random.choice(proxies)
+            if proxy in self.bad_proxies:
+                continue
+            self.proxy_used = 0
+            return {'http': proxy}
 
     def check_return(self, err):
         """
@@ -68,49 +120,63 @@ class BaseDownloader(Logger):
         """
         downloads given link
         """
-        error_count = 0
-        while True:
-            try:
-                with requests.Session() as session:
-                    session.headers.update(self.headers)
-                    if post != None:
-                        response = session.post(url, post)
-                    else:
-                        response = session.get(url)
-                    self.status_code = response.status_code
-                    self.url = response.url
-                    content = response.text
-                    content_non_unicode = response.content
-                break
-            except requests.packages.urllib3.exceptions.ReadTimeoutError as err:
-                Logger.log.exception("%s", url)
-                return self.check_return(err)
-            except requests.exceptions.SSLError as err:
-                Logger.log.exception("%s", url)
-                return self.check_return(err)
-            except requests.ConnectionError as err:
-                url = url.replace(' ', '%20').lower()
-                url = url.replace('<br%20>', '')
-                url = url.replace('<br%20/>', '')
-                if 'code' in err:
-                    self.status_code = err.code
-                    Logger.log.info('received code: %s', err)
-                    if err.code == 404:
-                        error_count = 6
-                error_count = error_count + 1
-                if error_count > 3 and error_count < 5:
-                    Logger.log.error('error! will retry %s', url)
-                    time.sleep(10)
-                    continue
-                if error_count > 5:
-                    Logger.log.exception('Too many failuers, I giveup %s', url)
-                    return self.check_return(err)
+        if self.proxy_used >= 10:
+            self.current_proxy = self.get_random_proxy()
+        proxy = self.current_proxy
+        url = cleanup_url(url)
+        try:
+            response = self._download(url, post, proxy)
+        except requests.ConnectionError:
+            return False
+        self.url = response.url
+        content = response.text
+        content_non_unicode = response.content
+        self.status_code = response.status_code
         self.content = content
         self.content_non_unicode = content_non_unicode
         self.last_url = response.url
         self.downloads = self.downloads + 1
         self.take_a_nap_after(SLEEP_AFTER, SLEEP)
         return True
+
+    def _download(self, url, post=None, proxy=None):
+        """does the actual download
+
+        :url: @todo
+        :post: @todo
+        :returns: @todo
+
+        """
+        error_count = 0
+        while True:
+            try:
+                with requests.Session() as session:
+                    session.headers.update(self.headers)
+                    if post != None:
+                        response = session.post(url, post, proxies=proxy)
+                    else:
+                        response = session.get(url, proxies=proxy)
+                if self.proxy_enabled():
+                    self.proxy_used += 1
+                return response
+            except requests.packages.urllib3.exceptions.ReadTimeoutError as err:
+                Logger.log.exception("%s", url)
+                raise requests.ConnectionError()
+            except requests.exceptions.SSLError as err:
+                Logger.log.exception("%s", url)
+                raise requests.ConnectionError()
+            except requests.exceptions.ProxyError as err:
+                Logger.log.exception("%s", proxy['http'])
+                self.bad_proxies.add(proxy['http'])
+                utils.append_to_file('bad_proxies', proxy['http'] + '\n')
+                self.current_proxy = self.get_random_proxy()
+                error_count += 1
+                if error_count < 3:
+                    continue
+                raise requests.ConnectionError()
+            except requests.ConnectionError:
+                Logger.log.exception('Failed to parse: ', url)
+                raise requests.ConnectionError()
 
     def take_a_nap_after(self, after, duration):
         """
