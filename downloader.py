@@ -88,10 +88,10 @@ class BaseDownloader(Logger):
         """
         if self.proxy_enabled():
             self.current_proxy = self.get_random_proxy()
-        try:
-            self.bad_proxies = set(utils.read_file('bad_proxies', True))
-        except FileNotFoundError:
-            pass
+            try:
+                self.bad_proxies = set(utils.read_file('bad_proxies', True))
+            except OSError:
+                pass
 
     def get_random_proxy(self):
         """returns a proxy from proxies.txt
