@@ -96,16 +96,17 @@ class BaseDownloader(Logger):
 
     def get_random_proxy(self):
         """returns a proxy from proxies.txt
-        :returns: @todo
 
+        :returns: @todo
         """
-        proxies = utils.read_file('proxies.txt', True)
+        proxy_file = Logger.cfg.g('proxy_file', 'proxies.txt')
+        proxies = utils.read_file(proxy_file, True)
         while True:
             proxy = random.choice(proxies)
             if proxy in self.bad_proxies:
                 continue
             self.proxy_used = 0
-            return {'http': proxy}
+            return proxy
 
     def check_return(self, err):
         """
@@ -120,9 +121,11 @@ class BaseDownloader(Logger):
         """
         downloads given link
         """
-        if self.proxy_used >= 10:
+        if self.proxy_used >= 100:
+            old_proxy = self.current_proxy
             self.current_proxy = self.get_random_proxy()
-        proxy = self.current_proxy
+            Logger.log.info("proxy: %s -> %s", old_proxy, self.current_proxy)
+        proxy = {'http': self.current_proxy}
         url = cleanup_url(url)
         try:
             response = self._download(url, post, proxy)
@@ -159,20 +162,29 @@ class BaseDownloader(Logger):
                 if self.proxy_enabled():
                     self.proxy_used += 1
                 return response
-            except requests.packages.urllib3.exceptions.ReadTimeoutError as err:
+            except requests.packages.urllib3.exceptions.ReadTimeoutError:
                 Logger.log.exception("%s", url)
                 raise requests.ConnectionError()
-            except requests.exceptions.SSLError as err:
+            except requests.exceptions.SSLError:
                 Logger.log.exception("%s", url)
                 raise requests.ConnectionError()
-            except requests.exceptions.ProxyError as err:
-                Logger.log.exception("%s", proxy['http'])
-                self.bad_proxies.add(proxy['http'])
-                utils.append_to_file('bad_proxies', proxy['http'] + '\n')
-                self.current_proxy = self.get_random_proxy()
-                error_count += 1
-                if error_count < 3:
+            except requests.exceptions.ProxyError:
+                if 'http' in proxy:
+                    Logger.log.exception("%s", proxy['http'])
+                    proxy = {'https': proxy}
                     continue
+                elif 'https' in proxy:
+                    Logger.log.exception("%s", proxy['https'])
+                    proxy = {'https': 'sock5://%s' % proxy}
+                    continue
+                else:
+                    self.bad_proxies.add(proxy['http'])
+                    utils.append_to_file('bad_proxies', proxy['http'] + '\n')
+                    self.current_proxy = self.get_random_proxy()
+                    proxy = {'http': self.current_proxy}
+                    error_count += 1
+                    if error_count < 3:
+                        continue
                 raise requests.ConnectionError()
             except requests.ConnectionError:
                 Logger.log.exception('Failed to parse: ', url)
