@@ -90,8 +90,7 @@ class BaseDownloader(Logger):
             self.current_proxy = self.get_random_proxy()
         try:
             self.bad_proxies = set(utils.read_file('bad_proxies', True))
-        except Exception:
-            Logger.log.exception("failed to load file")
+        except FileNotFoundError:
             pass
 
     def get_random_proxy(self):

@@ -25,7 +25,6 @@ def read_file(filename, linewise=False):
                 content = content.split("\n")
         return content
     except Exception as e:
-        print(filename)
         raise e
 
 
