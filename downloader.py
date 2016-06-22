@@ -168,22 +168,14 @@ class BaseDownloader(Logger):
                 Logger.log.exception("%s", url)
                 raise requests.ConnectionError()
             except requests.exceptions.ProxyError:
-                if 'http' in proxy:
-                    Logger.log.exception("%s", proxy['http'])
-                    proxy = {'https': proxy}
+                self.bad_proxies.add(proxy['http'])
+                utils.append_to_file('bad_proxies', proxy['http'] + '\n')
+                self.current_proxy = self.get_random_proxy()
+                proxy = {'http': self.current_proxy}
+                error_count += 1
+                if error_count < 3:
                     continue
-                elif 'https' in proxy:
-                    Logger.log.exception("%s", proxy['https'])
-                    proxy = {'https': 'sock5://%s' % proxy}
-                    continue
-                else:
-                    self.bad_proxies.add(proxy['http'])
-                    utils.append_to_file('bad_proxies', proxy['http'] + '\n')
-                    self.current_proxy = self.get_random_proxy()
-                    proxy = {'http': self.current_proxy}
-                    error_count += 1
-                    if error_count < 3:
-                        continue
+                self.current_proxy = self.get_random_proxy()
                 raise requests.ConnectionError()
             except requests.ConnectionError:
                 Logger.log.exception('Failed to parse: ', url)
