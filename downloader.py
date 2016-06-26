@@ -25,6 +25,36 @@ SLEEP_AFTER = 10
 SLEEP = 3
 
 
+class Dom(object):
+    """dom helper,
+
+    incase we have to switch to beautifulsoup parser
+    """
+
+    def __init__(self, dom, dom_type=0):
+        super(Dom, self).__init__()
+        self.dom = dom
+        self.dom_type = dom_type
+
+    def xpath(self, xpath):
+        """use xpath
+
+        :xpath: @todo
+        :returns: @todo
+
+        """
+        if self.dom_type == 1:
+            return self.dom.find(xpath)
+        return self.dom.xpath(xpath)
+
+    def make_links_absolute(self, link):
+        """calls make_links_absolute
+        :returns: @todo
+
+        """
+        self.dom.make_links_absolute(link)
+
+
 def cleanup_url(url):
     """cleans up the given url of weird stuffs
 
@@ -182,18 +212,13 @@ class BaseDownloader(Logger):
                 raise requests.ConnectionError()
 
     def take_a_nap_after(self, after, duration):
-        """
-        force sleep after
-        """
+        """force sleep :after: for :duration:"""
         if self.downloads % after == 0:
             time.sleep(duration)
 
 
 class DomDownloader(BaseDownloader):
-    """
-    sets up DOM to parse html document
-    """
-
+    """sets up DOM to parse html document"""
     def __init__(self):
         super(DomDownloader, self).__init__()
         self.dom = None
@@ -206,23 +231,30 @@ class DomDownloader(BaseDownloader):
             Logger.log.error('download failed')
             return None
         content = self.content
+        tried_non_unicode = False
+        tried_soup = False
         while True:
             try:
                 if self.remove_br:
                     content = utils.remove_br(content)
-                self.dom = html.fromstring(content)
+                dom = html.fromstring(content)
+                self.dom = Dom(dom, 0)
                 break
             except ValueError:
+                if tried_non_unicode is True:
+                    Logger.log.exception("failed to parse")
+                    break
+                tried_non_unicode = True
                 content = self.content_non_unicode
             except XMLSyntaxError:
-                Logger.log.exception('failed parsing content')
+                if tried_soup:
+                    break
+                Logger.log.error('lxml failed, switching to soupparser')
+                from lxml.html.soupparser import fromstring
+                dom = fromstring(content)
+                self.dom = Dom(dom, 1)
+                tried_soup = True
                 break
-
-    def make_links_absolute(self, link):
-        """add base url to link
-        """
-        self.dom_orig = copy.deepcopy(self.dom)
-        self.dom.make_links_absolute(link)
 
     def clean_dom(self):
         """get rids of script, style and comments"""
@@ -234,9 +266,7 @@ class DomDownloader(BaseDownloader):
 
 
 class CachedDownloader(BaseDownloader):
-    """
-    downloads and save webpages
-    """
+    """downloads and save webpages"""
 
     def __init__(self):
         super(CachedDownloader, self).__init__()
@@ -332,17 +362,12 @@ class TestDownloader(unittest.TestCase):
     }
 
     def test_base_downloader(self):
-        """tests base downloader
-        :returns: @todo
-
-        """
+        """tests base downloader"""
         pass
 
 
 def main():
-    """
-    do some tests
-    """
+    """do some tests"""
     unittest.main()
 
 

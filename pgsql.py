@@ -149,7 +149,7 @@ class PGSql(DBBase):
         cols = ', '.join(data[0].keys())
         query = "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, qfields)
         state = self.execute_query(data, query, True)
-        if state == -2:
+        if state == -2 or state == -3:
             cnt = 0
             for row in data:
                 if self.append_data(row, table):
@@ -180,8 +180,8 @@ class PGSql(DBBase):
             except psycopg2.IntegrityError:
                 PGSql.logger.debug("duplicate %s", query)
                 return -2
-            except psycopg2.DataError:
-                PGSql.logger.debug("data error %s", query)
+            except psycopg2.DataError as err:
+                PGSql.logger.debug("data error %s, %s", query, err)
                 return -3
             except psycopg2.Error:
                 PGSql.logger.exception("%s %s", query, data)
