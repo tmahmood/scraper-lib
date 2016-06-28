@@ -25,36 +25,6 @@ SLEEP_AFTER = 10
 SLEEP = 3
 
 
-class Dom(object):
-    """dom helper,
-
-    incase we have to switch to beautifulsoup parser
-    """
-
-    def __init__(self, dom, dom_type=0):
-        super(Dom, self).__init__()
-        self.dom = dom
-        self.dom_type = dom_type
-
-    def xpath(self, xpath):
-        """use xpath
-
-        :xpath: @todo
-        :returns: @todo
-
-        """
-        if self.dom_type == 1:
-            return self.dom.find(xpath)
-        return self.dom.xpath(xpath)
-
-    def make_links_absolute(self, link):
-        """calls make_links_absolute
-        :returns: @todo
-
-        """
-        self.dom.make_links_absolute(link)
-
-
 def cleanup_url(url):
     """cleans up the given url of weird stuffs
 
@@ -95,6 +65,7 @@ class BaseDownloader(Logger):
         self.last_url = None
         self.content_non_unicode = ''
         self.status_code = 'N/A'
+        self.timeout = Logger.cfg.g('timeout', 60)
         self.opener = None
         self.from_cache = False
         self.testing = False
@@ -185,12 +156,17 @@ class BaseDownloader(Logger):
                 with requests.Session() as session:
                     session.headers.update(self.headers)
                     if post != None:
-                        response = session.post(url, post, proxies=proxy)
+                        response = session.post(url, post, proxies=proxy,
+                                                timeout=self.timeout)
                     else:
-                        response = session.get(url, proxies=proxy)
+                        response = session.get(url, proxies=proxy,
+                                               timeout=self.timeout)
                 if self.proxy_enabled():
                     self.proxy_used += 1
                 return response
+            except requests.exceptions.Timeout:
+                Logger.log.error("Timed out: %s", url)
+                raise requests.ConnectionError()
             except requests.packages.urllib3.exceptions.ReadTimeoutError:
                 Logger.log.exception("%s", url)
                 raise requests.ConnectionError()
@@ -234,6 +210,7 @@ class DomDownloader(BaseDownloader):
         self.remove_br = False
 
     def download(self, url=None, post=None):
+        """downloads by URL and set DOM for the URL"""
         state = super(DomDownloader, self).download(url, post)
         if not state:
             Logger.log.error('download failed')
@@ -250,14 +227,15 @@ class DomDownloader(BaseDownloader):
                 break
             except ValueError:
                 if tried_non_unicode is True:
-                    Logger.log.exception("failed to parse")
+                    Logger.log.exception("failed to unicode")
                     break
                 tried_non_unicode = True
                 content = self.content_non_unicode
             except XMLSyntaxError:
                 if tried_soup:
+                    Logger.log.exception("soup spoiled")
                     break
-                Logger.log.error('lxml failed, switching to soupparser')
+                Logger.log.error('lxml failed, trying soup')
                 from lxml.html.soupparser import fromstring
                 dom = fromstring(content)
                 self.dom = Dom(dom, 1)
@@ -311,6 +289,60 @@ class CachedDomLoader(DomDownloader, CachedDownloader):
     """
     def __init__(self):
         super(CachedDomLoader, self).__init__()
+
+
+class Dom(object):
+    """dom helper,
+
+    incase we have to switch to beautifulsoup parser
+    """
+
+    def __init__(self, dom, dom_type=0):
+        super(Dom, self).__init__()
+        self.dom = dom
+        self.dom_type = dom_type
+
+    def first(self, xpath):
+        """gets the first element from the result"""
+        elist = self.xpath(xpath)
+        try:
+            return elist[0]
+        except IndexError:
+            return None
+
+    def attr(self, xpath, attr):
+        """get [attr] of element at [index] from the result"""
+        elm = self.first(xpath)
+        try:
+            return elm[0].attrib[attr]
+        except IndexError:
+            return None
+
+    def text(self, xpath, index=0):
+        """get text of element at [index] from the result"""
+        elist = self.xpath(xpath)
+        try:
+            return elist[index].text_content()
+        except IndexError:
+            return None
+
+    def xpath(self, xpath):
+        """use xpath
+
+        :xpath: @todo
+        :returns: @todo
+
+        """
+        if self.dom_type == 1:
+            return self.dom.find(xpath)
+        return self.dom.xpath(xpath)
+
+    def make_links_absolute(self, link):
+        """calls make_links_absolute
+        :returns: @todo
+
+        """
+        self.dom.make_links_absolute(link)
 
 
 class TestDownloader(unittest.TestCase):
