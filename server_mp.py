@@ -2,7 +2,7 @@
 multiprocessing server
 """
 import socket
-from inc.client import Client
+from libs.client import Client
 from libs import utils
 
 LOGGER = utils.setup_logger()
@@ -11,27 +11,46 @@ LOGGER = utils.setup_logger()
 class Server(object):
     """docstring for ServerMultiProcess"""
 
-    def __init__(self, host, port):
+    def __init__(self):
         super(Server, self).__init__()
+        self.host = None
+        self.client_provider = None
+        self.port = None
+        self.socket = None
+
+    def set_host(self, host):
+        """set host"""
         self.host = host
+        return self
+
+    def set_port(self, port):
+        """set port"""
         self.port = int(port)
+        return self
+
+    def set_socket(self):
+        """sets up whole thing"""
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((self.host, self.port))
         self.socket.listen(10)
         utils.save_to_file('port', '{}'.format(self.port))
+        return self
+
+    def set_client_provider(self, client_provider):
+        """request handler"""
+        self.client_provider = client_provider
+        return self
 
     def start(self):
-        """everything starts here
-
-        """
+        """everything starts here"""
         process = None
         try:
             while True:
                 try:
                     conn, address = self.socket.accept()
                     LOGGER.info("Got connection %s", address)
-                    process = Client(conn)
-                    process.daemon = True
+                    process = self.client_provider() \
+                                  .set_conn(conn)
                     process.start()
                 except KeyboardInterrupt:
                     if conn:

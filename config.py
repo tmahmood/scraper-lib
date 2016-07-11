@@ -6,7 +6,8 @@ class Config(object):
     def __init__(self, cfgfile='cfg/config.json'):
         super(Config, self).__init__()
         self.cfgfile = cfgfile
-        self.cfg = json.load(open(self.cfgfile))
+        with open(self.cfgfile) as jsonfile:
+            self.cfg = json.load(jsonfile)
 
     def get(self, *args, **kwargs):
         k = self.cfg

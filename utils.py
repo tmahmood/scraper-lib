@@ -3,10 +3,13 @@ import codecs
 import logging
 import logging.handlers
 import os
-import libs.config as config
 import re
 import json
 
+try:
+    import libs.config as config
+except ImportError:
+    import config
 try:
     from hashlib import md5
 except ImportError as e:
@@ -213,6 +216,36 @@ def get_timestamp():
     return (datetime.now() - datetime(1970, 1, 1)).total_seconds()
 
 
+def is_valid_cache_file(fullpath, notlessthan=100):
+    """check if given file path is not an incomplete
+    html file"""
+    if not os.path.exists(fullpath):
+        return False
+    statinfo = os.stat(fullpath)
+    return statinfo.st_size > notlessthan
+
+
+def get_cache_full_path(url, post=None):
+    """generate full path for given URL with POST data
+
+    :url:
+    :post: post data to pass
+    :returns: full path of the cache file
+
+    """
+    filename = hash(url, post)
+    return file_cached_path(filename, url)
+
+
+def clean_failed_page_cache(url, post=None):
+    """
+    remove cached files that failed
+    """
+    fullpath = get_cache_full_path(url, post)
+    if os.path.exists(fullpath):
+        os.unlink(fullpath)
+
+
 def file_cached_path(filename, url=None):
     """ expects hashed filename """
     burl = ''
@@ -267,3 +300,24 @@ def delete_folder_content(folder, delete_parent=False):
             print(e)
     if delete_parent:
         os.rmdir(folder)
+
+
+def get_net_loc(url):
+    """get net location without domain
+
+    :url: url to clean
+    :returns: @todo
+
+    """
+    try:
+        from urllib.parse import urlparse
+    except ImportError:
+        from urlparse import urlparse
+    urlobj = urlparse(url.replace('www.', ''))
+    netloc = urlobj.netloc.split('.')
+    if len(netloc) > 2:
+        return '.'.join(netloc[1:])
+    else:
+        return urlobj.netloc
+
+
