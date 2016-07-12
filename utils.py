@@ -5,14 +5,17 @@ import logging.handlers
 import os
 import re
 import json
-
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 try:
     import libs.config as config
 except ImportError:
     import config
 try:
     from hashlib import md5
-except ImportError as e:
+except ImportError:
     from md5 import md5
 
 
@@ -309,10 +312,6 @@ def get_net_loc(url):
     :returns: @todo
 
     """
-    try:
-        from urllib.parse import urlparse
-    except ImportError:
-        from urlparse import urlparse
     urlobj = urlparse(url.replace('www.', ''))
     netloc = urlobj.netloc.split('.')
     if len(netloc) > 2:
@@ -321,3 +320,55 @@ def get_net_loc(url):
         return urlobj.netloc
 
 
+def get_domain(url, tlds):
+    """extracts top level domain"""
+    url_elements = urlparse(url)[1].split('.')
+    for i in range(-len(url_elements), 0):
+        last_i_elements = url_elements[i:]
+        #    i=-3: ["abcde","co","uk"]
+        #    i=-2: ["co","uk"]
+        #    i=-1: ["uk"] etc
+        # abcde.co.uk, co.uk, uk
+        candidate = ".".join(last_i_elements)
+        # *.co.uk, *.uk, *
+        wildcard_candidate = ".".join(["*"] + last_i_elements[1:])
+        exception_candidate = "!" + candidate
+        # match tlds:
+        if (exception_candidate in tlds):
+            return ".".join(url_elements[i:])
+        if (candidate in tlds or wildcard_candidate in tlds):
+            return ".".join(url_elements[i - 1:])
+            # returns "abcde.co.uk"
+    raise ValueError("Domain not in global list of TLDs")
+
+
+def older_than(filepath, hours):
+    """check if file path is older than given time
+
+    :filepath: file to check
+    :hours: how many hours
+    :returns: true/false
+    """
+    mtime = os.path.getmtime(filepath)
+    import time
+    ctime = time.time()
+    time_passed = (ctime - mtime) / 3600
+    if time_passed > hours:
+        return True
+    return False
+
+
+def get_tlds():
+    """load tld"""
+    from libs.pages import DownloadedPage
+    from libs.downloader import BaseDownloader
+    fname = "effective_tld_names.dat.txt"
+    if not os.path.exists(fname) or older_than(fname, 12):
+        url = 'https://publicsuffix.org/list/effective_tld_names.dat'
+        dlm = BaseDownloader()
+        page = DownloadedPage().set_url(url)
+        dlm.download(page=page)
+        save_to_file(fname, page.text)
+    with open("effective_tld_names.dat.txt") as tld_file:
+        tlds = [line.strip() for line in tld_file if line[0] not in "/\n"]
+    return tlds
