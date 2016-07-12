@@ -105,7 +105,10 @@ class BaseDownloader(Logger):
     def _download(self, url, post=None, proxy=None):
         """does the actual download"""
         error_count = 0
+        break_it = False
         while True:
+            if break_it:
+                return None
             try:
                 with requests.Session() as session:
                     session.headers.update(self.headers)
@@ -120,13 +123,13 @@ class BaseDownloader(Logger):
                 return response
             except requests.exceptions.Timeout:
                 self.log.error("Timed out: %s", url)
-                raise requests.ConnectionError()
+                break_it = True
             except requests.packages.urllib3.exceptions.ReadTimeoutError:
                 self.log.exception("%s", url)
-                raise requests.ConnectionError()
+                break_it = True
             except requests.exceptions.SSLError:
                 self.log.exception("%s", url)
-                raise requests.ConnectionError()
+                break_it = True
             except requests.exceptions.ProxyError:
                 self.bad_proxies.add(proxy['http'])
                 utils.append_to_file('bad_proxies', proxy['http'] + '\n')
@@ -136,10 +139,9 @@ class BaseDownloader(Logger):
                 if error_count < 3:
                     continue
                 self.current_proxy = self.get_random_proxy()
-                raise requests.ConnectionError()
             except requests.ConnectionError:
                 self.log.exception('Failed to parse: %s', url)
-                raise requests.ConnectionError()
+                break_it = True
 
     def take_a_nap_after(self, after, duration):
         """force sleep :after: for :duration:"""
@@ -169,7 +171,7 @@ class BaseDownloader(Logger):
             page.set_text(response.text, response.content) \
                 .set_status_code(response.status_code) \
                 .set_last_url(response.url)
-        except UnboundLocalError:
+        except (UnboundLocalError, AttributeError):
             page.set_state(False)
 
 
