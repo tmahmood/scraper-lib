@@ -136,8 +136,15 @@ def hash(url, data=None):
     return m.hexdigest()
 
 
-def setup_logger():
-    cfg = config.Config()
+def setup_logger(load_cfg=None):
+    """sets up logging"""
+    # {{{ load config
+    if load_cfg != None:
+        cfg = config.Config(load_cfg)
+    else:
+        cfg = config.Config()
+    # }}}
+    # {{{ setting up everything
     logger = logging.getLogger(cfg.g('logger.base'))
     level = getattr(logging, cfg.g('logger.level'))
     clevel = getattr(logging, cfg.g('logger.console.level'))
@@ -146,19 +153,24 @@ def setup_logger():
     logfilepath = cfg.g('logger.path')
     maxsize = cfg.g('logger.backupsize', default=33554432)
     filehandler = logging.handlers.RotatingFileHandler(logfilepath,
-                                              mode='w',
-                                              maxBytes=maxsize,
-                                              backupCount=2)
-    consolehandler = logging.StreamHandler()
+                                                       mode='w',
+                                                       maxBytes=maxsize,
+                                                       backupCount=2)
     template = cfg.get('logger', 'template')
     formatter = logging.Formatter(template)
     formatter.datefmt = cfg.g('logger.datefmt')
+    # }}}
+    # {{{ configure handlers
+    console_off = cfg.g('logger.console.off', 'no')
+    if console_off == 'no':
+        consolehandler = logging.StreamHandler()
+        consolehandler.setFormatter(formatter)
+        consolehandler.setLevel(clevel)
+        logger.addHandler(consolehandler)
     filehandler.setFormatter(formatter)
-    consolehandler.setFormatter(formatter)
-    consolehandler.setLevel(clevel)
     filehandler.setLevel(flevel)
     logger.addHandler(filehandler)
-    logger.addHandler(consolehandler)
+    # }}}
     return logger
 
 
@@ -318,6 +330,20 @@ def get_net_loc(url):
         return '.'.join(netloc[1:])
     else:
         return urlobj.netloc
+
+
+def get_shorted_url(url, length=10):
+    """cuts url for logger """
+    try:
+        return (''.join(url.netloc.split('www.')[1][:length])).center(length + 4, '_')
+    except IndexError:
+        return (''.join(url.netloc[:length])).center(length + 4, '_')
+    except AttributeError:
+        urlobj = urlparse(url)
+    try:
+        return (''.join(urlobj.netloc.split('www.')[1][:length])).center(length + 4, '_')
+    except IndexError:
+        return (''.join(urlobj.netloc[:length])).center(length + 4, '_')
 
 
 def get_domain(url, tlds):

@@ -4,31 +4,134 @@ downloader
 """
 import logging
 import requests
+import pycurl
+from io import BytesIO
 import time
-import unittest
 import random
 try:
     import libs.config as config
     import libs.utils as utils
-    import libs.pages as pages
 except ImportError:
+    # pylint: disable=relative-import
     import config
     import utils
-    import pages
 
-# pylint: disable=global-statement
 
 USER_AGENT = 'Mozilla/5.0 Gecko/20120101 Firefox/40.0'
 SLEEP_AFTER = 10
 SLEEP = 3
 
 
-class ResponseText(object):
-    """store response text"""
-    def __init__(self):
-        super(ResponseText, self).__init__()
-        self.text = None
-        self.raw_text = None
+class Error(Exception):
+    """handles exceptions"""
+    def __init__(self, value=None):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+class RetryableError(Error):
+    """docstring for ConnectionError"""
+    def __init__(self, value=None):
+        super(RetryableError, self).__init__()
+        self.value = value
+
+
+class SSLError(Error):
+    """docstring for SSLError"""
+    def __init__(self, value=None):
+        super(SSLError, self).__init__()
+        self.value = value
+
+
+class ConnectionError(Error):
+    """docstring for ConnectionError"""
+    def __init__(self, value=None):
+        super(ConnectionError, self).__init__()
+        self.value = value
+
+
+def request_factory(page, proxy, headers, timeout, logger=None):
+    """uses request to download"""
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    try:
+        with requests.Session() as session:
+            session.headers.update(headers)
+            if page.post != None:
+                response = session.post(page.url, page.post, proxies=proxy,
+                                        timeout=timeout)
+            else:
+                response = session.get(page.url, proxies=proxy, timeout=timeout)
+        page.set_text(response.text, response.content) \
+            .set_status_code(response.status_code) \
+            .set_last_url(response.url)
+    except requests.exceptions.Timeout:
+        logger.error("Timed out: %s", page.url)
+        raise RetryableError('timed out')
+    except requests.packages.urllib3.exceptions.ReadTimeoutError:
+        logger.exception("%s", page.url)
+        raise RetryableError('read timed out')
+    except requests.exceptions.ProxyError:
+        logger.exception("%s", page.url)
+        raise RetryableError(proxy)
+    except requests.exceptions.SSLError:
+        logger.exception("%s", page.url)
+        raise SSLError()
+    except requests.exceptions.InvalidSchema:
+        logger.exception('Failed to parse: %s', page.url)
+        raise ConnectionError()
+    except requests.ConnectionError:
+        logger.exception('Failed to parse: %s', page.url)
+        raise ConnectionError()
+
+
+def curl_factory(page, proxy, headers, timeout, logger=None):
+    """uses curl to download"""
+    curl_headers = []
+    for key in headers:
+        curl_headers.append('%s: %s' % (key, headers[key]))
+    curl_headers += ['Accept-Charset: UTF-8']
+    response = BytesIO()
+    headers = BytesIO()
+    curl = pycurl.Curl()
+    try:
+        curl.setopt(curl.URL, page.url)
+    except UnicodeEncodeError:
+        logger.error("URL ISSUE: %s", page.url)
+        raise Error()
+    curl.setopt(curl.TIMEOUT, timeout)
+    curl.setopt(curl.WRITEFUNCTION, response.write)
+    curl.setopt(curl.HEADERFUNCTION, headers.write)
+    curl.setopt(curl.HTTPHEADER, curl_headers)
+    curl.setopt(curl.FOLLOWLOCATION, True)
+    curl.setopt(curl.TIMEOUT, timeout * 2)
+    if proxy != None:
+        logger.debug("setting proxy: %s", proxy)
+        curl.setopt(curl.PROXY, proxy['http'])
+    if page.post is not None:
+        logger.debug("setting post: %s", page.post)
+        curl.setopt(curl.POSTFIELD, page.post)
+    try:
+        curl.perform()
+    except pycurl.error:
+        logger.exception('failed downloading')
+        raise Error()
+    text = response.getvalue().decode('UTF-8', errors='ignore')
+    status_code = curl.getinfo(curl.RESPONSE_CODE)
+    page.set_text(text, response).set_status_code(status_code)
+    try:
+        headers.seek(0)
+        lines = headers.getvalue().decode('UTF-8').split('\r\n')
+        last_url = page.url
+        for line in lines:
+            if 'Location' in line:
+                last_url = line.split(': ')[-1]
+        curl.close()
+        page.set_last_url(last_url)
+    except Exception:
+        logger.exception('failed parsing headers')
+        page.set_last_url(page.url)
 
 
 def cleanup_url(url):
@@ -45,17 +148,17 @@ def cleanup_url(url):
 
 
 # pylint: disable=too-few-public-methods
-class Logger(object):
+class BaseCommon(object):
     """logger class"""
 
     def __init__(self):
-        super(Logger, self).__init__()
+        super(BaseCommon, self).__init__()
         self.cfg = config.Config()
         txt = '{}.dm'.format(self.cfg.g('logger.base'))
         self.log = logging.getLogger(txt)
 
 
-class BaseDownloader(Logger):
+class BaseDownloader(BaseCommon):
     """docstring for BaseDownloader"""
 
     def __init__(self):
@@ -67,14 +170,33 @@ class BaseDownloader(Logger):
         self.proxy_used = 0
         self.bad_proxies = set()
         self.headers = {'USER_AGENT': USER_AGENT}
+        self.use_proxy = self.cfg.g('proxies', 'no') == 'yes'
+        self.use_curl = self.cfg.g('use_curl', 'no') == 'yes'
         self.load_bad_proxies()
+        self.which_downloader()
+
+    def set_logger(self, logger):
+        """sets up independent logger
+
+        :logger: @todo
+        :returns: @todo
+
+        """
+        self.log = logger
+
+    def which_downloader(self):
+        """sets which downloader to be used"""
+        if self.use_curl:
+            self.download_with = curl_factory
+        else:
+            self.download_with = request_factory
 
     def proxy_enabled(self):
         """check if proxy is enabled
         :returns: @todo
 
         """
-        return self.cfg.g('proxies', 'no') == 'yes'
+        return self.use_proxy
 
     def load_bad_proxies(self):
         """loads up bad proxies
@@ -102,46 +224,27 @@ class BaseDownloader(Logger):
             self.proxy_used = 0
             return proxy
 
-    def _download(self, url, post=None, proxy=None):
+    def _download(self, page, proxy=None):
         """does the actual download"""
         error_count = 0
-        break_it = False
         while True:
-            if break_it:
-                return None
             try:
-                with requests.Session() as session:
-                    session.headers.update(self.headers)
-                    if post != None:
-                        response = session.post(url, post, proxies=proxy,
-                                                timeout=self.timeout)
-                    else:
-                        response = session.get(url, proxies=proxy,
-                                               timeout=self.timeout)
+                self.download_with(page, proxy, self.headers,
+                                   self.timeout, self.log)
                 if self.proxy_enabled():
                     self.proxy_used += 1
-                return response
-            except requests.exceptions.Timeout:
-                self.log.error("Timed out: %s", url)
-                break_it = True
-            except requests.packages.urllib3.exceptions.ReadTimeoutError:
-                self.log.exception("%s", url)
-                break_it = True
-            except requests.exceptions.SSLError:
-                self.log.exception("%s", url)
-                break_it = True
-            except requests.exceptions.ProxyError:
-                self.bad_proxies.add(proxy['http'])
-                utils.append_to_file('bad_proxies', proxy['http'] + '\n')
-                self.current_proxy = self.get_random_proxy()
-                proxy = {'http': self.current_proxy}
+                return
+            except ConnectionError:
+                return
+            except RetryableError:
+                if self.proxy_enabled():
+                    self.bad_proxies.add(proxy['http'])
+                    utils.append_to_file('bad_proxies', proxy['http'] + '\n')
+                    self.current_proxy = self.get_random_proxy()
+                    proxy = {'http': self.current_proxy}
                 error_count += 1
-                if error_count < 3:
-                    continue
-                self.current_proxy = self.get_random_proxy()
-            except requests.ConnectionError:
-                self.log.exception('Failed to parse: %s', url)
-                break_it = True
+                if error_count > 3:
+                    raise Error()
 
     def take_a_nap_after(self, after, duration):
         """force sleep :after: for :duration:"""
@@ -154,24 +257,23 @@ class BaseDownloader(Logger):
             old_proxy = self.current_proxy
             self.current_proxy = self.get_random_proxy()
             self.log.info("proxy: %s -> %s", old_proxy, self.current_proxy)
-        proxy = {'http': self.current_proxy}
+        if self.proxy_enabled():
+            proxy = {'http': self.current_proxy}
+        else:
+            proxy = None
         url = cleanup_url(page.url)
         if page.url != url:
             page.set_url(url)
         try:
             start_time = time.time()
-            response = self._download(page.url, page.post, proxy)
+            self._download(page, proxy)
             end_time = time.time()
             page.set_load_time(end_time - start_time)
             self.take_a_nap_after(SLEEP_AFTER, SLEEP)
+            self.downloads = self.downloads + 1
         except requests.ConnectionError:
             self.log.debug("ConnectionError: %s", url)
-        self.downloads = self.downloads + 1
-        try:
-            page.set_text(response.text, response.content) \
-                .set_status_code(response.status_code) \
-                .set_last_url(response.url)
-        except (UnboundLocalError, AttributeError):
+        except (UnboundLocalError, AttributeError, Error):
             page.set_state(False)
 
 
@@ -188,178 +290,3 @@ class CachedDownloader(BaseDownloader):
             super(CachedDownloader, self).download(page)
             if page.state:
                 utils.save_to_file(fullpath, page.text, True)
-
-
-CODES = {
-    '200': [True, 'OK'],
-    '201': [True, 'Created'],
-    '202': [True, 'Accepted'],
-    '203': [True, 'Non-Authoritative Information'],
-    '204': [True, 'No Content'],
-    '205': [True, 'Reset Content'],
-    '206': [True, 'Partial Content'],
-    '300': [True, 'Multiple Choices'],
-    '301': [True, 'Moved Permanently'],
-    '302': [True, 'Found'],
-    '303': [True, 'See Other'],
-    '304': [True, 'Not Modified'],
-    '305': [True, 'Use Proxy'],
-    '306': [True, 'Unused'],
-    '307': [True, 'Temporary Redirect'],
-    '308': [True, 'Permanent Redirect'],
-    '400': [False, 'Bad Request'],
-    '401': [False, 'Unauthorized'],
-    '402': [False, 'Payment Required'],
-    '403': [False, 'Forbidden'],
-    '404': [False, 'Not Found'],
-    '405': [False, 'Method Not Allowed'],
-    '406': [False, 'Not Acceptable'],
-    '407': [False, 'Proxy Authentication Required'],
-    '408': [False, 'Request Timeout'],
-    '409': [False, 'Conflict'],
-    '410': [False, 'Gone'],
-    '411': [False, 'Length Required'],
-    '412': [False, 'Precondition Required'],
-    '413': [False, 'Request Entry Too Large'],
-    '414': [False, 'Request-URI Too Long'],
-    '415': [False, 'Unsupported Media Type'],
-    '416': [False, 'Requested Range Not Satisfiable'],
-    '417': [False, 'Expectation Failed'],
-    '418': [False, "I'm a teapot"],
-    '422': [False, 'Unprocessable Entity'],
-    '428': [False, 'Precondition Required'],
-    '429': [False, 'Too Many Requests'],
-    '431': [False, 'Request Header Fields Too Large'],
-    '451': [False, 'Unavailable For Legal Reasons'],
-    '500': [False, 'Internal Server Error'],
-    '501': [False, 'Not Implemented'],
-    '502': [False, 'Bad Gateway'],
-    '503': [False, 'Service Unavailable'],
-    '504': [False, 'Gateway Timeout'],
-    '505': [False, 'HTTP Version Not Supported'],
-    '511': [False, 'Network Authentication Required'],
-    '520': [False, 'Web server is returning an unknown error'],
-    '522': [False, 'Connection timed out'],
-    '524': [False, 'A timeout occurred'],
-}
-
-
-class TestDownloaderBasics(unittest.TestCase):
-    """docstring for TestDownloaderBasics"""
-    def setUp(self):
-        """clear cache folder
-        """
-        try:
-            utils.delete_folder_content('cache/example.com')
-        except Exception:
-            pass
-
-    def test_200(self):
-        """test 200 status code"""
-        dlm = BaseDownloader()
-        page = pages.DownloadedPage().set_url('http://httpstat.us/200')
-        dlm.download(page)
-        self.assertTrue(page.state)
-        self.assertEqual(page.status_code, 200)
-
-    def test_301(self):
-        """redirection
-        :returns: @todo
-
-        """
-        dlm = BaseDownloader()
-        page = pages.DownloadedPage().set_url('http://httpstat.us/301')
-        dlm.download(page)
-        self.assertTrue(page.state)
-        self.assertEqual(200, page.status_code)
-        self.assertEqual(page.last_url, 'http://httpstat.us')
-
-    def test_404(self):
-        """handling errors"""
-        dlm = BaseDownloader()
-        page = pages.DownloadedPage().set_url('http://httpstat.us/404')
-        dlm.download(page)
-        self.assertFalse(page.state)
-        self.assertEqual(404, page.status_code)
-
-    def test_404_web(self):
-        """handling errors"""
-        dlm = BaseDownloader()
-        page = pages.DownloadedPage().set_url('http://192.155.84.35/scraper/sd')
-        dlm.download(page)
-        self.assertFalse(page.state)
-        self.assertEqual(404, page.status_code)
-
-    def test_timeout_fail(self):
-        """handling errors"""
-        dlm = BaseDownloader()
-        dlm.timeout = 1
-        page = pages.DownloadedPage().set_url('http://httpstat.us/524')
-        dlm.download(page)
-        self.assertFalse(page.state)
-        self.assertEqual(524, page.status_code)
-
-    def test_all_codes(self):
-        """test with all possible status codes"""
-        dlm = BaseDownloader()
-        for code in CODES:
-            info = CODES[code]
-            url = 'http://httpstat.us/%s' % code
-            page = pages.DownloadedPage().set_url(url)
-            dlm.download(page)
-            self.assertEqual(info[0], page.state)
-            if int(code) >= 400:
-                self.assertEqual(int(code), page.status_code)
-
-    def test_dom(self):
-        """test dom parsing and querying
-        :returns: @todo
-
-        """
-        dlm = BaseDownloader()
-        page = pages.DownloadedPage().set_url('http://example.com')
-        dlm.download(page)
-        dom = page.get_dom()
-        result = dom.xpath('//h1')
-        self.assertEqual(1, len(result))
-        self.assertEqual('Example Domain', result[0].text_content().strip())
-        self.assertEqual('More information...', dom.text('//a'))
-        self.assertEqual('Example Domain', dom.first('//h1').text_content())
-        self.assertEqual('More information...', dom.text('//p', 1))
-        self.assertEqual("http://www.iana.org/domains/example",
-                         dom.attr('//a', 'href'))
-
-    def test_cached_page(self):
-        """test run cached page class"""
-        dlm = CachedDownloader()
-        page = pages.DownloadedPage().set_url('http://example.com')
-        dlm.download(page)
-        dom = page.get_dom()
-        result = dom.xpath('//h1')
-        self.assertEqual(1, len(result))
-        self.assertEqual('Example Domain', result[0].text_content().strip())
-        self.assertEqual('More information...', dom.text('//a'))
-        self.assertEqual('Example Domain', dom.first('//h1').text_content())
-        self.assertEqual('More information...', dom.text('//p', 1))
-        self.assertEqual("http://www.iana.org/domains/example",
-                         dom.attr('//a', 'href'))
-
-    def test_broken_html(self):
-        """test on how to handle broken html files"""
-        broken_html = """<meta/><head><title>Hello</head><body onload=crash()>
-        Hi all<p><a href="google.com">google</a>"""
-        page = pages.DownloadedPage().set_text(broken_html)
-        dom = page.get_dom()
-        self.assertEqual(dom.first('//title').text_content(), 'Hello')
-        self.assertEqual(dom.attr('//a', 'href'), 'google.com')
-        self.assertEqual(dom.text('//a'), 'google')
-
-
-def main():
-    logger = logging.getLogger('logger')
-    logger.info('### start testing ###')
-    unittest.main()
-
-
-if __name__ == '__main__':
-    main()

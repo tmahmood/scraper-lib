@@ -69,8 +69,8 @@ class BasePage(Logger):
 
     def set_logger(self):
         """set up logger"""
-        netloc = utils.get_net_loc(self.url)
-        txt = '{}.page.{}'.format(self.cfg.g('logger.base'), netloc)
+        netloc = utils.get_shorted_url(self.url)
+        txt = '{}.page:{}'.format(self.cfg.g('logger.base'), netloc)
         self.logger = logging.getLogger(txt)
         return self
 
