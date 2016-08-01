@@ -335,20 +335,25 @@ def get_net_loc(url):
 def get_shorted_url(url, length=10):
     """cuts url for logger """
     try:
-        return (''.join(url.netloc.split('www.')[1][:length])).center(length + 4, '_')
+        segs = url.netloc.split('www.')[1][:length]
+        return (''.join(segs)).center(length + 4, '_')
     except IndexError:
         return (''.join(url.netloc[:length])).center(length + 4, '_')
     except AttributeError:
         urlobj = urlparse(url)
     try:
-        return (''.join(urlobj.netloc.split('www.')[1][:length])).center(length + 4, '_')
+        segs = urlobj.netloc.split('www.')[1][:length]
+        return (''.join(segs)).center(length + 4, '_')
     except IndexError:
         return (''.join(urlobj.netloc[:length])).center(length + 4, '_')
 
 
 def get_domain(url, tlds):
     """extracts top level domain"""
-    url_elements = urlparse(url)[1].split('.')
+    try:
+        url_elements = urlparse(url)[1].split('.')
+    except TypeError:
+        return ValueError("Failed to check url")
     for i in range(-len(url_elements), 0):
         last_i_elements = url_elements[i:]
         #    i=-3: ["abcde","co","uk"]
