@@ -1,12 +1,9 @@
-import logging
 from lxml.etree import XMLSyntaxError
 from lxml.html.clean import Cleaner
 from lxml import html
 try:
-    import libs.config as config
     import libs.utils as utils
 except ImportError:
-    import config
     import utils
 
 
@@ -33,45 +30,23 @@ def load_dom(content, remove_br):
     return Dom(dom)
 
 
-# pylint: disable=too-few-public-methods
-class Logger(object):
-    """logger class"""
-
-    def __init__(self):
-        super(Logger, self).__init__()
-        self.cfg = config.Config()
-        txt = '{}.dm'.format(self.cfg.g('logger.base'))
-        self.log = logging.getLogger(txt)
-
-
-class BasePage(Logger):
+class BasePage(object):
     """result of downloads are stored here"""
     def __init__(self):
         super(BasePage, self).__init__()
         self.url = None
         self.post = None
         self.state = False
-        self.logger = None
         self.load_time = None
 
     def set_url(self, url):
-        """set url and logger is set based on url
+        """set url
 
         :url: @todo
         :returns: @todo
 
         """
         self.url = url
-        if self.logger is None:
-            self.set_logger()
-        self.set_logger()
-        return self
-
-    def set_logger(self):
-        """set up logger"""
-        netloc = utils.get_shorted_url(self.url)
-        txt = '{}.page:{}'.format(self.cfg.g('logger.base'), netloc)
-        self.logger = logging.getLogger(txt)
         return self
 
     def set_post(self, post):
@@ -111,12 +86,10 @@ class DownloadedPage(BasePage):
                 return load_dom(content, remove_br)
             except ValueError:
                 if tried_non_unicode is True:
-                    self.log.exception("failed to unicode: %s", self.url)
                     break
                 tried_non_unicode = True
                 content = self.raw_text
             except XMLSyntaxError:
-                self.log.exception('failed to load dom: %s', self.url)
                 break
         return None
 
