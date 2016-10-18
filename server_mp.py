@@ -1,9 +1,8 @@
 """
 multiprocessing server
 """
-import socket
-from libs.client import Client
 from libs import utils
+from time import sleep
 
 LOGGER = utils.setup_logger()
 
@@ -13,32 +12,22 @@ class Server(object):
 
     def __init__(self):
         super(Server, self).__init__()
-        self.host = None
         self.client_provider = None
-        self.port = None
-        self.socket = None
-
-    def set_host(self, host):
-        """set host"""
-        self.host = host
-        return self
-
-    def set_port(self, port):
-        """set port"""
-        self.port = int(port)
-        return self
-
-    def set_socket(self):
-        """sets up whole thing"""
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind((self.host, self.port))
-        self.socket.listen(10)
-        utils.save_to_file('port', '{}'.format(self.port))
-        return self
+        self.provider = None
 
     def set_client_provider(self, client_provider):
         """request handler"""
         self.client_provider = client_provider
+        return self
+
+    def set_provider(self, provider):
+        """data provider
+
+        :provider: @todo
+        :returns: @todo
+
+        """
+        self.provider = provider
         return self
 
     def start(self):
@@ -47,19 +36,16 @@ class Server(object):
         try:
             while True:
                 try:
-                    conn, address = self.socket.accept()
-                    LOGGER.info("Got connection %s", address)
-                    process = self.client_provider() \
-                                  .set_conn(conn)
-                    process.start()
+                    providerdata = self.provider.get_queued_data()
+                    if providerdata is not None:
+                        process = self.client_provider()\
+                                      .set_provider_data(providerdata)
+                        process.start()
+                    sleep(3)
                 except KeyboardInterrupt:
-                    if conn:
-                        conn.close()
                     break
                 except Exception:
                     LOGGER.exception("FAILED")
-                    if conn:
-                        conn.close()
                     break
         except Exception:
             LOGGER.exception("server out ...")
@@ -68,4 +54,3 @@ class Server(object):
             # set running scrapers to be paused
             if process != None:
                 process.cleanup()
-            self.socket.close()
