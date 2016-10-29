@@ -105,9 +105,11 @@ def remove_br(content):
 
 
 def clean_url(lnk, baseurl):
+    """cleans up url"""
     lnk = lnk.replace('.html', '')
     lnk = lnk.replace('.htm', '')
     lnk = lnk.replace(baseurl, '')
+    lnk = lnk.replace('%20', ' ')
     return lnk.lower()
 
 

@@ -71,7 +71,7 @@ class DownloadedPage(BasePage):
         super(DownloadedPage, self).__init__()
         self.url = None
         self.post = None
-        self.last_url = None
+        self.redirected_to = None
         self.status_code = None
         self.text = None
         self.raw_text = None
@@ -93,9 +93,9 @@ class DownloadedPage(BasePage):
                 break
         return None
 
-    def set_last_url(self, last_url):
+    def set_redirected_to_url(self, redirected_to):
         """set last url set in response, is useful for redirected webpages"""
-        self.last_url = last_url
+        self.redirected_to = redirected_to
         return self
 
     def set_status_code(self, status_code):

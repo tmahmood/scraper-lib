@@ -177,8 +177,8 @@ class PGSql(DBBase):
                     cur.execute(query, data)
                     self.lastid = cur.fetchone()[0]
                 return True
-            except psycopg2.IntegrityError:
-                PGSql.logger.debug("duplicate %s", query)
+            except psycopg2.IntegrityError as iexp:
+                PGSql.logger.debug("duplicate %s %s", query, iexp)
                 return -2
             except psycopg2.DataError as err:
                 PGSql.logger.debug("data error %s, %s", query, err)

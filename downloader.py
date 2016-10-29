@@ -63,9 +63,10 @@ def request_factory(page, proxy, headers, timeout, logger=None):
                                         timeout=timeout)
             else:
                 response = session.get(page.url, proxies=proxy, timeout=timeout)
+        # download page and set response details
         page.set_text(response.text, response.content) \
             .set_status_code(response.status_code) \
-            .set_last_url(response.url)
+            .set_redirected_to_url(response.url)
     except requests.exceptions.Timeout:
         logger.error("Timed out: %s", page.url)
         raise RetryableError('timed out')
@@ -123,15 +124,15 @@ def curl_factory(page, proxy, headers, timeout, logger=None):
     try:
         headers.seek(0)
         lines = headers.getvalue().decode('UTF-8').split('\r\n')
-        last_url = page.url
+        redirected_to = page.url
         for line in lines:
             if 'Location' in line:
-                last_url = line.split(': ')[-1]
+                redirected_to = line.split(': ')[-1]
         curl.close()
-        page.set_last_url(last_url)
+        page.set_redirected_to_url(redirected_to)
     except Exception:
         logger.exception('failed parsing headers')
-        page.set_last_url(page.url)
+        page.set_redirected_to_url(page.url)
 
 
 def cleanup_url(url):
@@ -285,7 +286,7 @@ class CachedDownloader(BaseDownloader):
         fullpath = utils.get_cache_full_path(page.url, page.post)
         if utils.is_valid_cache_file(fullpath):
             content = utils.read_file(fullpath)
-            page.set_text(content).set_last_url(page.url).set_load_time(0)
+            page.set_text(content).set_redirected_to_url(page.url).set_load_time(0)
         else:
             super(CachedDownloader, self).download(page)
             if page.state:
