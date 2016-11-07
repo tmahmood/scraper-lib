@@ -1,10 +1,12 @@
-from multiprocessing import Process
+from multiprocessing.dummy import Process
 from libs.config import Config
 import logging
 
 
 class Client(Process):
-    """docstring for Client"""
+    """Request handler
+
+    Receives request from scraper server and creates new threaded process"""
     def __init__(self):
         super(Client, self).__init__()
         self.request_provider = None
@@ -16,7 +18,9 @@ class Client(Process):
         self.logger = logging.getLogger(lcfg)
 
     def set_request_provider(self, request_provider):
-        """request handler"""
+        """request handler,
+
+        request handlers process the request and starts scraping"""
         self.request_provider = request_provider
         return self
 
@@ -48,6 +52,7 @@ class Client(Process):
 
     def cleanup(self):
         """cleans up when exiting
+
         :returns: @todo
         """
         self.logger.info("cleaning up")
